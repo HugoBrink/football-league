@@ -20,7 +20,7 @@ export default function Table({ players }: { players: Player[] }) {
                                 <th scope="col" className="px-3 py-5 font-medium">
                                     Points
                                 </th>
-                                <th scope="col" className="px-3 py-5 font-medium">
+                                <th scope="col" className="px-3 py-5 font-medium hidden">
                                     Games Played
                                 </th>
                                 <th scope="col" className="px-3 py-5 font-medium">
@@ -52,13 +52,13 @@ export default function Table({ players }: { players: Player[] }) {
                                     <td className="whitespace-nowrap px-3 py-3">
                                         {player.points}
                                     </td>
-                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3 hidden ">
                                         {player.gamesPlayed}
                                     </td>
-                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3 ">
                                         {player.wins}
                                     </td>
-                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3 ">
                                         {player.losses}
                                     </td>
                                     <td className="whitespace-nowrap py-3 pl-6 pr-3">

@@ -1,4 +1,5 @@
 import Table from "../components/Table"
+import AddPlayer from "../components/AddPlayer"
 
 const players = [
     { name: 'Player 1', points: 9, gamesPlayed: 3, wins: 3, losses: 0, goalDifference: 5 },
@@ -12,7 +13,11 @@ export default function Dashboard() {
 
     return (
         <div>
-            <h1>Dashboard</h1>
+            <div className="flex justify-between items-center w-[80%]">
+                <h1>Dashboard</h1>
+                <AddPlayer />
+            </div>
+
             <Table players={players} />
         </div>
     )
