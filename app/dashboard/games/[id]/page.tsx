@@ -1,6 +1,7 @@
 import { fetchGame, fetchPlayers } from "@/app/lib/data"
 import { DeleteGame } from "../../../components/DeleteGame"
 import { EditGame } from "../../../components/EditGame"
+import { Game } from "@/app/lib/definitions"
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
     const params = await props.params
@@ -28,8 +29,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                     <p className="font-bold">Brancos</p>
                     <p>{playerMap.get(BigInt(game?.brancos_captain || ''))}</p>
                     <ul className="list-inside">
-                        {game?.brancos_players.map((playerId: string) => (
-                            <li key={playerId}>{playerMap.get(BigInt(playerId))}</li>
+                        {players.map((player: { id: any, name: string }, index: number) => (
+                            <option key={index} value={player.id}>{player.name}</option>
                         ))}
                     </ul>
                 </div>
@@ -37,8 +38,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                     <p className="font-bold">Pretos</p>
                     <p>{playerMap.get(BigInt(game?.pretos_captain || ''))}</p>
                     <ul className="list-inside">
-                        {game?.pretos_players.map((playerId: string) => (
-                            <li key={playerId}>{playerMap.get(BigInt(playerId))}</li>
+                        {players.map((player: { id: any, name: string }, index: number) => (
+                            <option key={index} value={player.id}>{player.name}</option>
                         ))}
                     </ul>
                 </div>
@@ -48,8 +49,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                 {game?.brancos_score} - {game?.pretos_score}
             </p>
             <div className="flex gap-2">
-                <DeleteGame game={game} />
-                <EditGame game={game} />
+                <DeleteGame game={game as Game} />
+                <EditGame game={game as Game} />
             </div>
         </div>
     )
