@@ -21,8 +21,8 @@ body {
 }
 
 h1 {
-    font-size: 24px;
-    font-weight: bold;
+  font-size: 24px;
+  font-weight: bold;
 }
 
 button {
@@ -34,8 +34,10 @@ button {
   cursor: pointer;
 }
 
-input, select {
+input,
+select {
   border: 2px solid #e0e0e0;
   border-radius: 5px;
   padding: 5px;
+  color: black;
 }

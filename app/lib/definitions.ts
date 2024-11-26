@@ -18,5 +18,11 @@ export type Game = {
     pretos_players: string[]
     brancos_captain: string
     pretos_captain: string
+    numero: number
 }
 
+export type User = {
+    id: bigint
+    email: string
+    password: string
+}

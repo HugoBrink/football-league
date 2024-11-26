@@ -1,7 +1,8 @@
-import Table from "../components/Table"
-import { fetchPlayers } from "../lib/data"
-import { Player } from "../lib/definitions";
-import Add from "../components/Add";
+import Table from "../../components/Table"
+import { fetchPlayers } from "../../lib/data"
+import { Player } from "../../lib/definitions";
+import Add from "../../components/Add";
+import React from "react";
 
 const players = [
     { name: 'Player 1', points: 9, gamesPlayed: 3, wins: 3, losses: 0, goalDifference: 5 },
@@ -13,7 +14,7 @@ const players = [
 
 export default async function Dashboard() {
 
-    const players = await fetchPlayers() as Player[];
+    const players = await fetchPlayers();
 
     return (
         <div>
