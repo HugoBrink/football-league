@@ -10,7 +10,6 @@ import { signIn } from "@/auth";
 import { AuthError } from "next-auth";
 
 const gameSchema = z.object({
-    id: z.string().optional(),
     date: z.coerce.date(),
     brancos_score: z.coerce.number(),
     pretos_score: z.coerce.number(),
@@ -22,7 +21,7 @@ const gameSchema = z.object({
     numero: z.number().optional()
 });
 
-const CreateGame = gameSchema.omit({ id: true });
+const CreateGame = gameSchema.omit({ numero: true });
 
 async function batchUpdatePlayers(
     playerIds: string[], 
@@ -81,7 +80,7 @@ export async function createGame(formData: FormData) {
    
     const { goal_difference } = parsedFormData.data;
     
-    const { winningTeam, losingTeam } = getWinningAndLosingTeams(parsedFormData.data);
+    const { winningTeam, losingTeam } = getWinningAndLosingTeams(parsedFormData.data as Game);
 
     const absGoalDifference = Math.abs(goal_difference);
 
@@ -147,7 +146,7 @@ export async function updateGame(game: Game, formData: FormData) {
             message: "Invalid form data"
         };
     }
-    const { winningTeam: winningTeamUpdated, losingTeam: losingTeamUpdated } = getWinningAndLosingTeams(parsedFormData.data);
+    const { winningTeam: winningTeamUpdated, losingTeam: losingTeamUpdated } = getWinningAndLosingTeams(parsedFormData.data as Game);
     const absGoalDifferenceUpdated = Math.abs(parsedFormData.data.goal_difference);
 
     await Promise.all([

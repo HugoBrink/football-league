@@ -6,13 +6,18 @@ import type { User } from './app/lib/definitions';
 import prisma from './app/lib/client';
 
 async function getUser(email: string): Promise<User | undefined> {
-    console.log('Attempting to fetch user with email:', email);
     try {
         const user = await prisma.users.findFirst({
             where: { email: email }
         });
-        console.log('Database response:', user);
-        return user;
+        
+        if (user && user.email) {
+            return {
+                ...user,
+                email: user.email,
+            } as User;
+        }
+        return undefined;
     } catch (error) {
         console.error('Failed to fetch user:', error);
         throw new Error('Failed to fetch user.');

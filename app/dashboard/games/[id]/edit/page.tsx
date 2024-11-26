@@ -16,7 +16,9 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         return <div>Game not found</div>
     }
 
-    const updateGameAction = updateGame.bind(null, game as Game)
+    const updateGameAction = async (formData: FormData) => {
+        await updateGame(game as Game, formData);
+    };
 
     return (
         <form action={updateGameAction} className="flex flex-col items-center gap-2 ">
@@ -32,7 +34,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                     <h1>Brancos</h1>
                     <label className="text-bold" htmlFor="captain-brancos">Capitão Brancos</label>
                     <select id="captain-brancos" name="captain-brancos" defaultValue={game?.brancos_captain || ''}>
-                        {players.map((player: { id, name: string }, index: number) => (
+                        {players.map((player: { id: any, name: string }, index: number) => (
                             <option key={index} value={player.id}>{player.name}</option>
                         ))}
                     </select>
@@ -42,9 +44,9 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                             key={index}
                             id={`players-brancos-${index + 1}`}
                             name={`players-brancos[]`}
-                            defaultValue={game?.brancos_players?.[index] || ''}
+                            defaultValue={Array.isArray(game?.brancos_players) ? String(game.brancos_players[index] || '') : ''}
                         >
-                            {players.map((player: { id, name: string }, index: number) => (
+                            {players.map((player: { id: any, name: string }, index: number) => (
                                 <option key={index} value={player.id}>{player.name}</option>
                             ))}
                         </select>
@@ -54,7 +56,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                     <h1>Pretos</h1>
                     <label className="text-bold" htmlFor="captain-pretos">Capitão Pretos</label>
                     <select id="captain-pretos" name="captain-pretos" defaultValue={game?.pretos_captain || ''}>
-                        {players.map((player: { id, name: string }, index: number) => (
+                        {players.map((player: { id: any, name: string }, index: number) => (
                             <option key={index} value={player.id}>{player.name}</option>
                         ))}
                     </select>
@@ -64,9 +66,9 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                             key={index}
                             id={`players-pretos-${index + 1}`}
                             name={`players-pretos[]`}
-                            defaultValue={game?.pretos_players?.[index] || ''}
+                            defaultValue={Array.isArray(game?.pretos_players) ? String(game.pretos_players[index] || '') : ''}
                         >
-                            {players.map((player: { id, name: string }, index: number) => (
+                            {players.map((player: { id: any, name: string }, index: number) => (
                                 <option key={index} value={player.id}>{player.name}</option>
                             ))}
                         </select>

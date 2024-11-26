@@ -22,7 +22,7 @@ export type Game = {
 }
 
 export type User = {
-    id: bigint
+    id: any
     email: string
     password: string
 }
