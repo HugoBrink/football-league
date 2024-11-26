@@ -57,7 +57,7 @@ export async function deletePlayer(id: string) {
     });
 }
 
-export async function createGame(formData: FormData) {
+export async function createGame(formData: FormData): Promise<void> {
     const rawFormData = {
         date: formData.get('date'),
         brancos_score: formData.get('brancos-score'),
@@ -73,9 +73,7 @@ export async function createGame(formData: FormData) {
 
     if (!parsedFormData.success) {
         console.log(parsedFormData.error.flatten().fieldErrors);
-        return {
-            message: "Invalid form data"
-        };
+        return;
     }
    
     const { goal_difference } = parsedFormData.data;
@@ -142,9 +140,7 @@ export async function updateGame(game: Game, formData: FormData) {
 
     if (!parsedFormData.success) {
         console.log(parsedFormData.error.flatten().fieldErrors);
-        return {
-            message: "Invalid form data"
-        };
+        return;
     }
     const { winningTeam: winningTeamUpdated, losingTeam: losingTeamUpdated } = getWinningAndLosingTeams(parsedFormData.data as Game);
     const absGoalDifferenceUpdated = Math.abs(parsedFormData.data.goal_difference);

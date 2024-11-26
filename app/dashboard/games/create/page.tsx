@@ -22,7 +22,7 @@ export default async function Page() {
                     <h1>Brancos</h1>
                     <label className="text-bold" htmlFor="captain-brancos">Capitão Brancos</label>
                     <select id="captain-brancos" name="captain-brancos">
-                        {players.map((player: { id: string, name: string }, index: number) => (
+                        {players.map((player: { id: any, name: string }, index: number) => (
                             <option key={index} value={player.id}>{player.name}</option>
                         ))}
                     </select>
@@ -33,7 +33,7 @@ export default async function Page() {
                             id={`players-brancos-${index + 1}`}
                             name={`players-brancos[]`}
                         >
-                            {players.map((player: { id: string, name: string }, index: number) => (
+                            {players.map((player: { id: any, name: string }, index: number) => (
                                 <option key={index} value={player.id}>{player.name}</option>
                             ))}
                         </select>
@@ -43,7 +43,7 @@ export default async function Page() {
                     <h1>Pretos</h1>
                     <label className="text-bold" htmlFor="captain-pretos">Capitão Pretos</label>
                     <select id="captain-pretos" name="captain-pretos">
-                        {players.map((player: { id: string, name: string }, index: number) => (
+                        {players.map((player: { id: any, name: string }, index: number) => (
                             <option key={index} value={player.id}>{player.name}</option>
                         ))}
                     </select>
@@ -54,7 +54,7 @@ export default async function Page() {
                             id={`players-pretos-${index + 1}`}
                             name={`players-pretos[]`}
                         >
-                            {players.map((player: { id: string, name: string }, index: number) => (
+                            {players.map((player: { id: any, name: string }, index: number) => (
                                 <option key={index} value={player.id}>{player.name}</option>
                             ))}
                         </select>
