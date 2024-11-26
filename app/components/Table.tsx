@@ -15,22 +15,22 @@ export default function Table({ players }: { players: Player[] }) {
 
                                 </th>
                                 <th scope="col" className="px-4 py-5 font-medium sm:pl-6">
-                                    Name
+                                    Nome
                                 </th>
                                 <th scope="col" className="px-3 py-5 font-medium">
-                                    Points
-                                </th>
-                                <th scope="col" className="px-3 py-5 font-medium hidden">
-                                    Games Played
+                                    Pontos
                                 </th>
                                 <th scope="col" className="px-3 py-5 font-medium">
-                                    Wins
+                                    Jogos Jogados
                                 </th>
                                 <th scope="col" className="px-3 py-5 font-medium">
-                                    Losses
+                                    Vitórias
                                 </th>
                                 <th scope="col" className="px-3 py-5 font-medium">
-                                    Goal Difference
+                                    Derrotas
+                                </th>
+                                <th scope="col" className="px-3 py-5 font-medium">
+                                    Diferença de Golos
                                 </th>
                             </tr>
                         </thead>
@@ -52,8 +52,8 @@ export default function Table({ players }: { players: Player[] }) {
                                     <td className="whitespace-nowrap px-3 py-3">
                                         {player.points}
                                     </td>
-                                    <td className="whitespace-nowrap py-3 pl-6 pr-3 hidden ">
-                                        {player.gamesPlayed}
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3 ">
+                                        {player.games}
                                     </td>
                                     <td className="whitespace-nowrap py-3 pl-6 pr-3 ">
                                         {player.wins}
@@ -62,7 +62,7 @@ export default function Table({ players }: { players: Player[] }) {
                                         {player.losses}
                                     </td>
                                     <td className="whitespace-nowrap py-3 pl-6 pr-3">
-                                        {player.goalDifference}
+                                        {player.goals_diff}
                                     </td>
                                 </tr>
                             ))}

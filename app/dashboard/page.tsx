@@ -1,5 +1,7 @@
 import Table from "../components/Table"
-import AddPlayer from "../components/AddPlayer"
+import { fetchPlayers } from "../lib/data"
+import { Player } from "../lib/definitions";
+import Add from "../components/Add";
 
 const players = [
     { name: 'Player 1', points: 9, gamesPlayed: 3, wins: 3, losses: 0, goalDifference: 5 },
@@ -9,13 +11,16 @@ const players = [
 ]
 
 
-export default function Dashboard() {
+export default async function Dashboard() {
+
+    const players = await fetchPlayers() as Player[];
 
     return (
         <div>
             <div className="flex justify-between items-center w-[80%]">
                 <h1>Dashboard</h1>
-                <AddPlayer />
+                <Add type="players" />
+                <Add type="games" />
             </div>
 
             <Table players={players} />
