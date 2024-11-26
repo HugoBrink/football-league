@@ -1,5 +1,4 @@
 import prisma from "./client";
-import { Game, Player } from "./definitions";
 
 // Pure data access functions
 export async function fetchPlayers() {

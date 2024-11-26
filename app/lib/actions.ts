@@ -2,9 +2,8 @@
 
 import { redirect } from "next/navigation";
 import prisma from "./client";
-import { Game, Player } from "./definitions";
+import { Game } from "./definitions";
 import { z } from "zod";
-import { getPlayerById } from "./data";
 import { revalidatePath } from "next/cache";
 import { getWinningAndLosingTeams } from "../helpers/functions";
 import { signIn } from "@/auth";
@@ -80,7 +79,7 @@ export async function createGame(formData: FormData) {
         };
     }
    
-    const { brancos_players, pretos_players, goal_difference, brancos_captain, pretos_captain } = parsedFormData.data;
+    const { goal_difference } = parsedFormData.data;
     
     const { winningTeam, losingTeam } = getWinningAndLosingTeams(parsedFormData.data);
 
@@ -99,7 +98,7 @@ export async function createGame(formData: FormData) {
         })
     ]);
 
-    const game = await prisma.games.create({ 
+    await prisma.games.create({ 
         data: parsedFormData.data 
     });
     revalidatePath('/dashboard');

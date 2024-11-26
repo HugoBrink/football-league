@@ -1,6 +1,5 @@
 import Add from "@/app/components/Add"
 import { fetchGames, fetchPlayersNames } from "@/app/lib/data";
-import { Game } from "@/app/lib/definitions";
 import Link from "next/link"
 
 

@@ -1,5 +1,4 @@
 import { Player } from "@/app/lib/definitions"
-import Image from "next/image"
 
 export default function Table({ players }: { players: Player[] }) {
 

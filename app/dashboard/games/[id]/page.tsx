@@ -1,5 +1,4 @@
 import { fetchGame, fetchPlayers } from "@/app/lib/data"
-import { Game } from "@/app/lib/definitions"
 import { DeleteGame } from "../../../components/DeleteGame"
 import { EditGame } from "../../../components/EditGame"
 
