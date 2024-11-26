@@ -1,11 +1,11 @@
 export type Player = {
-    id: number
+    id: any
     name: string
-    points: number
-    games: number
-    wins: number
-    losses: number
-    goals_diff: number
+    points: number | null
+    games: number | null
+    wins: number | null
+    losses: number | null
+    goals_diff: number | null
 }
 
 export type Game = {
