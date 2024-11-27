@@ -7,14 +7,12 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isOnDashboard = nextUrl.pathname.match(/^\/dashboard\/.*\/create$/);
-      if (isOnDashboard) {
-        if (isLoggedIn) return true;
-        return false; // Redirect unauthenticated users to login page
-      } else if (isLoggedIn) {
-        return Response.redirect(new URL('/dashboard', nextUrl));
+      const isCreateRoute = nextUrl.pathname.match(/^\/dashboard\/.*\/create$/);
+      
+      if (isCreateRoute) {
+        return isLoggedIn;
       }
-      return true;
+      return true; // Allow access to all other routes
     },
   },
   providers: [], // Add providers with an empty array for now
