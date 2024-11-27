@@ -3,7 +3,10 @@ import prisma from "./client";
 // Pure data access functions
 export async function fetchPlayers() {
     return await prisma.players.findMany({ 
-        orderBy: { points: 'desc' } 
+        orderBy: [
+            { points: 'desc' },
+            { goals_diff: 'desc' }
+        ]
     });
 }
 
