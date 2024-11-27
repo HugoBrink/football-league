@@ -16,7 +16,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         return <div>Game not found</div>
     }
 
-    const playerMap = new Map(players.map(player => [player.id, player.name]))
+    const playerMap: Map<bigint, string> = new Map(players.map((player: { id: any, name: string }) => [BigInt(player.id), player.name]))
 
     return (
         <div className="w-full flex flex-col items-center gap-2 ">
