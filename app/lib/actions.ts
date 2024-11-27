@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { getWinningAndLosingTeams } from "../helpers/functions";
 import { signIn } from "@/auth";
 import { AuthError } from "next-auth";
+import { auth } from "@/auth";
 
 const gameSchema = z.object({
     date: z.coerce.date(),
@@ -104,7 +105,12 @@ export async function createGame(formData: FormData): Promise<void> {
 
 
 export async function deleteGame(game: Game) {
-    // update the players with the game deleted
+    const session = await auth();
+    
+    if (!session?.user) {
+        throw new Error('Not authorized');
+    }
+
     const { winningTeam, losingTeam } = getWinningAndLosingTeams(game);
     const absGoalDifference = Math.abs(game.goal_difference);
     
