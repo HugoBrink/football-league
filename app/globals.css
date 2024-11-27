@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
+  --background: #dddddd;
   --foreground: #171717;
 }
 
@@ -40,4 +40,22 @@ select {
   border-radius: 5px;
   padding: 5px;
   color: black;
+}
+
+.mobile-row {
+  display: flex;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  justify-content: center;
+  font-weight: 500;
+  font-weight: bold;
+
+  @media (min-width: 640px) {
+    display: block;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+    min-width: 0;
+  }
 }

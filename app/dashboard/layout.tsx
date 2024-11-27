@@ -7,10 +7,10 @@ export default function Layout({
 }>) {
     return (
         <div className="flex flex-row w-full">
-            <div className="w-1/4  hidden sm:flex">
+            <div className="w-1/4 hidden sm:flex">
                 <SideNav />
             </div>
-            <div className="flex-1 overflow-y-auto p-4 md:p-8">{children}</div>
+            <div className="flex-1 overflow-y-auto md:p-8 p-4">{children}</div>
         </div>
     );
 }

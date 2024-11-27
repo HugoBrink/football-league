@@ -3,6 +3,7 @@ import React from "react";
 export function DashboardSkeleton() {
     return (
         <div className="rounded-lg border border-gray-300 bg-white w-full h-full">
+            <h1>Grupeta de Futebol</h1>
             {/* Table header skeleton */}
             <div className="border-b border-gray-300 bg-gray-50 p-4">
                 <div className="h-8 w-48 animate-pulse rounded-md bg-gray-300" />
