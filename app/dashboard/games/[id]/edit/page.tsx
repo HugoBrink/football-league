@@ -1,7 +1,6 @@
 import React from 'react'
 import { fetchGame, fetchPlayers } from '../../../../lib/data'
 import { updateGame } from '@/app/lib/actions';
-import { Game } from '@/app/lib/definitions';
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
@@ -16,9 +15,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         return <div>Game not found</div>
     }
 
-    const updateGameAction = async (formData: FormData) => {
-        await updateGame(game as Game, formData);
-    };
+    const updateGameAction = updateGame.bind(null, game as any);
+
 
     return (
         <form action={updateGameAction} className="flex flex-col items-center gap-2 ">

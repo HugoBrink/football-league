@@ -30,8 +30,12 @@ export async function fetchGames() {
 }
 
 export async function fetchGame(id: string) {
-    return await prisma.games.findUnique({ 
+    const game = await prisma.games.findUnique({ 
         where: { id: Number(id) } 
     });
+    if (game) {
+        return { ...game, brancos_players: game.brancos_players as any, pretos_players: game.pretos_players as any }
+    }
+    return null
 }
 

@@ -29,8 +29,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                     <p className="font-bold">Brancos</p>
                     <p>{playerMap.get(BigInt(game?.brancos_captain || ''))}</p>
                     <ul className="list-inside">
-                        {players.map((player: { id: any, name: string }, index: number) => (
-                            <option key={index} value={player.id}>{player.name}</option>
+                        {game.brancos_players?.map((player: any, index: number) => (
+                            <option key={index} value={player.id}>{playerMap.get(BigInt(player))}</option>
                         ))}
                     </ul>
                 </div>
@@ -38,8 +38,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                     <p className="font-bold">Pretos</p>
                     <p>{playerMap.get(BigInt(game?.pretos_captain || ''))}</p>
                     <ul className="list-inside">
-                        {players.map((player: { id: any, name: string }, index: number) => (
-                            <option key={index} value={player.id}>{player.name}</option>
+                        {game.pretos_players?.map((player: any, index: number) => (
+                            <option key={index} value={player.id}>{playerMap.get(BigInt(player))}</option>
                         ))}
                     </ul>
                 </div>
