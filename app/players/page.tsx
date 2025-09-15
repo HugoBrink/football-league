@@ -1,13 +1,10 @@
 import { computeLongestLosingStreak, computeLongestUnbeatenStreak, computeSeasonStats, CURRENT_SEASON, fetchTopPlayersByGoalsDiff, fetchTopPlayersByPoints, fetchTopPlayersByWins } from "../lib/data";
 import SeasonSelect from "./SeasonSelect";
 
-type SearchParams = { [key: string]: string | string[] | undefined }
-type PageProps = { searchParams?: SearchParams | Promise<SearchParams> }
+type SearchParams = { [key: string]: string | string[] | undefined };
 
-export default async function Players({ searchParams }: PageProps) {
-    const sp: SearchParams | undefined = searchParams && typeof (searchParams as any).then === 'function'
-        ? await (searchParams as Promise<SearchParams>)
-        : (searchParams as SearchParams | undefined);
+export default async function Players({ searchParams }: { searchParams: Promise<SearchParams> }) {
+    const sp = await searchParams;
     const seasonParam = Array.isArray(sp?.season) ? sp?.season[0] : sp?.season;
     const season = seasonParam ? Number(seasonParam) : CURRENT_SEASON;
 
