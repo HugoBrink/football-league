@@ -1,4 +1,4 @@
-import { Player } from "@/app/lib/definitions"
+import { Player } from "@/app/lib/definitions";
 
 export default function Table({ players }: { players: Player[] }) {
 
@@ -46,6 +46,12 @@ export default function Table({ players }: { players: Player[] }) {
                                         <span className="sm:hidden">DG</span>
                                     </div>
                                 </th>
+                                <th scope="col" className="">
+                                    <div className="mobile-row">
+                                        <span className="hidden sm:inline">% de Vitórias</span>
+                                        <span className="sm:hidden">%V</span>
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="bg-white">
@@ -77,6 +83,9 @@ export default function Table({ players }: { players: Player[] }) {
                                     <td className="whitespace-nowrap py-3 pl-6 pr-3">
                                         {player.goals_diff}
                                     </td>
+                                    <td className="whitespace-nowrap py-3">
+                                        {player.wins && player.games ? (player.wins / player.games * 100).toFixed(2) + '%' : '0.00%'}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -86,5 +95,3 @@ export default function Table({ players }: { players: Player[] }) {
         </div>
     );
 }
-
-

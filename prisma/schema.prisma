@@ -18,7 +18,8 @@ model games {
   pretos_players  Json     @db.Json
   brancos_captain String?
   pretos_captain  String?
-  numero          Int?     @db.SmallInt
+  numero          Int      @default(autoincrement()) @db.SmallInt
+  season          Int      @default(1) @db.SmallInt
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -30,6 +31,7 @@ model players {
   wins       Int?   @default(0) @db.SmallInt
   losses     Int?   @default(0) @db.SmallInt
   goals_diff Int?   @default(0) @db.SmallInt
+  season     Int    @default(1) @db.SmallInt
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
