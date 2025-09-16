@@ -1,6 +1,6 @@
 'use client'
 
-import { Archive, Home, List, Swords, User } from 'lucide-react'
+import { Archive, Home, List, Swords, Trophy, User } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -10,6 +10,7 @@ const navItems = [
     { name: 'Season 1 Archive', href: '/dashboard/season/1', icon: Archive },
     { name: 'Player Stats ', href: `/players`, icon: User },
     { name: 'Duels', href: `/players/duels`, icon: Swords },
+    { name: 'Taça Mocamfe', href: '/dashboard/tournament', icon: Trophy },
 ]
 export default function NavLinks() {
     const pathname = usePathname()

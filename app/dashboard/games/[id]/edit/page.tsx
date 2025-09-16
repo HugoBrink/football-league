@@ -1,29 +1,64 @@
-import React from 'react'
-import { fetchGame, fetchPlayers } from '../../../../lib/data'
 import { updateGame } from '@/app/lib/actions';
+import { fetchTournamentMatches } from '@/app/lib/tournament';
+import { fetchGame, fetchPlayers } from '../../../../lib/data';
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
     const id = params.id;
 
-
-    const [game, players] = await Promise.all([
+    const [game, players, tournamentMatches] = await Promise.all([
         fetchGame(id),
-        fetchPlayers()
+        fetchPlayers(),
+        fetchTournamentMatches()
     ])
     if (!game) {
         return <div>Game not found</div>
     }
 
-    const updateGameAction = updateGame.bind(null, game as any);
+    // Find tournament match for this game
+    const tournamentMatch = tournamentMatches.find(m => m.game_id === game.id);
+    // Get other pending matches (for changing tournament match)
+    const pendingMatches = tournamentMatches.filter(m => !m.game_id || m.game_id === game.id);
 
+    const updateGameAction = updateGame.bind(null, game as any);
 
     return (
         <form action={updateGameAction} className="flex flex-col items-center gap-2 ">
             <h1>Editar jogo número: {game?.numero}</h1>
+
+            {pendingMatches.length > 0 && (
+                <div className="w-full max-w-md">
+                    <label htmlFor="tournament-match-id" className="block text-sm font-medium text-gray-700">
+                        Jogo da Taça Mocamfe (opcional)
+                    </label>
+                    <select
+                        id="tournament-match-id"
+                        name="tournament-match-id"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        defaultValue={tournamentMatch?.id ?? ''}
+                    >
+                        <option value="">Selecionar jogo do torneio...</option>
+                        {pendingMatches.map(match => {
+                            const player = players.find(p => String(p.id) === String(match.player_id))?.name ?? '?';
+                            const opponent = match.opponent_id
+                                ? players.find(p => String(p.id) === String(match.opponent_id))?.name ?? '?'
+                                : 'TBD';
+                            const roundName = match.round === 1 ? 'Primeira Ronda'
+                                : match.round === 2 ? 'Quartos de Final'
+                                : match.round === 3 ? 'Semi Final'
+                                : 'Final';
+                            return (
+                                <option key={match.id} value={match.id}>
+                                    {roundName}: {player} vs {opponent}
+                                </option>
+                            );
+                        })}
+                    </select>
+                </div>
+            )}
+
             <label htmlFor="date">Data do jogo:</label>
             <input type="date" id="date" name="date"
-                // Optional: you can also add a default value of today's date
                 defaultValue={new Date(game?.date).toLocaleDateString('en-GB').split('/').reverse().join('-')}
             />
 

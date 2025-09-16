@@ -9,6 +9,7 @@ import { getWinningAndLosingTeams } from "../helpers/functions";
 import prisma from "./client";
 import { CURRENT_SEASON } from "./data";
 import { Game } from "./definitions";
+import { updateMatchFromGame } from "./tournament";
 
 const gameSchema = z.object({
     date: z.coerce.date(),
@@ -19,7 +20,8 @@ const gameSchema = z.object({
     brancos_players: z.array(z.string()),
     pretos_captain: z.string(),
     pretos_players: z.array(z.string()),
-    numero: z.number().optional()
+    numero: z.number().optional(),
+    tournament_match_id: z.number().optional() // Optional tournament match ID
 });
 
 const CreateGame = gameSchema.omit({ numero: true });
@@ -68,6 +70,7 @@ export async function createGame(formData: FormData): Promise<void> {
         brancos_players: formData.getAll('players-brancos[]'),
         pretos_captain: formData.get('captain-pretos'),
         pretos_players: formData.getAll('players-pretos[]'),
+        tournament_match_id: formData.get('tournament-match-id') ? Number(formData.get('tournament-match-id')) : undefined
     };
 
     const parsedFormData = CreateGame.safeParse(rawFormData);
@@ -96,10 +99,17 @@ export async function createGame(formData: FormData): Promise<void> {
         })
     ]);
 
-    await prisma.games.create({
+    const game = await prisma.games.create({
         data: { ...parsedFormData.data, season: CURRENT_SEASON }
     });
+
+    // Always try to update tournament matches, even if not explicitly linked
+    if (game.id) {
+        await updateMatchFromGame(game.id);
+    }
+
     revalidatePath('/dashboard');
+    revalidatePath('/dashboard/tournament');
     redirect('/dashboard/games');
 }
 
@@ -118,7 +128,18 @@ export async function deleteGame(game: Game) {
         batchUpdatePlayers(winningTeam, { games: -1, wins: -1, points: -3, goalsDiff: -absGoalDifference }),
         batchUpdatePlayers(losingTeam, { games: -1, losses: -1, points: -1, goalsDiff: absGoalDifference })
     ]);
+
+    // Find and update any tournament matches that were using this game
+    await prisma.tournament_mocamfe.updateMany({
+        where: { game_id: game.id },
+        data: {
+            game_id: null,
+            winner_id: null
+        }
+    });
+
     await prisma.games.delete({ where: { id: game.id } });
+    revalidatePath('/dashboard/tournament');
     redirect('/dashboard/games');
 }
 
@@ -141,6 +162,7 @@ export async function updateGame(game: Game, formData: FormData) {
         brancos_players: formData.getAll('players-brancos[]'),
         pretos_captain: formData.get('captain-pretos'),
         pretos_players: formData.getAll('players-pretos[]'),
+        tournament_match_id: formData.get('tournament-match-id') ? Number(formData.get('tournament-match-id')) : undefined
     };
     const parsedFormData = gameSchema.safeParse(rawFormData);
 
@@ -156,12 +178,18 @@ export async function updateGame(game: Game, formData: FormData) {
         batchUpdatePlayers(losingTeamUpdated, { games: 1, losses: 1, points: 1, goalsDiff: -absGoalDifferenceUpdated })
     ]);
 
-    await prisma.games.update({
+    const updatedGame = await prisma.games.update({
         where: { id: game.id },
         data: parsedFormData.data
     });
 
+    // Always try to update tournament matches, even if not explicitly linked
+    if (updatedGame.id) {
+        await updateMatchFromGame(updatedGame.id);
+    }
+
     revalidatePath('/dashboard/games');
+    revalidatePath('/dashboard/tournament');
     redirect('/dashboard/games');
 }
 

@@ -41,3 +41,18 @@ model users {
   password String?
   email    String?
 }
+
+model tournament_mocamfe {
+  id          Int      @id @default(autoincrement())
+  season      Int      @default(2) @db.SmallInt
+  round       Int      // 1 = primeira ronda, 2 = quartos, 3 = semi, 4 = final
+  position    Int      // posição na árvore nesta ronda
+  player_id   BigInt   // id do jogador nesta posição
+  opponent_id BigInt?  // id do oponente (null se ainda não definido)
+  winner_id   BigInt?  // id do vencedor (null se ainda não jogado)
+  game_id     Int?     // id do jogo onde se defrontaram (null se pendente)
+
+  @@unique([season, round, position])
+  @@index([player_id])
+  @@index([opponent_id])
+}
