@@ -49,9 +49,6 @@ export async function createInitialBracket(playerIds: string[], season: number =
     // Shuffle players
     const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
 
-    // Calculate total rounds needed
-    const totalRounds = calculateTotalRounds(shuffled.length);
-
     // Create first round matches
     const matches = [];
     for (let i = 0; i < shuffled.length; i += 2) {
