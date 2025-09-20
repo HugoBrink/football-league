@@ -423,8 +423,8 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
     const byWinRate = entries
         .filter(e => e.gamesPlayed >= 5)
         .map(e => {
-            const totals = totalsByName.get(e.name) ?? { wins: e.wins, games: e.gamesPlayed };
-            const winRate = totals.games > 0 ? totals.wins / totals.games : 0;
+            // Use only current season's data
+            const winRate = e.gamesPlayed > 0 ? e.wins / e.gamesPlayed : 0;
             return { name: e.name, id: e.id, winRate };
         })
         .sort((a, b) => b.winRate - a.winRate);
