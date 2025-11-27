@@ -28,7 +28,7 @@ const CreateGame = gameSchema.omit({ numero: true });
 
 async function batchUpdatePlayers(
     playerIds: string[],
-    { games = 1, wins = 0, losses = 0, points = 0, goalsDiff = 0 }
+    { games = 1, wins = 0, losses = 0, draws = 0, points = 0, goalsDiff = 0 }
 ) {
     const playerIdsBigInt = playerIds.map(id => BigInt(id));
     return prisma.players.updateMany({
@@ -39,6 +39,7 @@ async function batchUpdatePlayers(
             games: { increment: games },
             wins: { increment: wins },
             losses: { increment: losses },
+            draws: { increment: draws },
             points: { increment: points },
             goals_diff: { increment: goalsDiff }
         }
@@ -82,22 +83,38 @@ export async function createGame(formData: FormData): Promise<void> {
 
     const { goal_difference } = parsedFormData.data;
 
-    const { winningTeam, losingTeam } = getWinningAndLosingTeams(parsedFormData.data as Game);
+    const { winningTeam, losingTeam, isDraw } = getWinningAndLosingTeams(parsedFormData.data as Game);
 
     const absGoalDifference = Math.abs(goal_difference);
 
-    await Promise.all([
-        batchUpdatePlayers(winningTeam, {
-            wins: 1,
-            points: 3,
-            goalsDiff: absGoalDifference
-        }),
-        batchUpdatePlayers(losingTeam, {
-            losses: 1,
-            points: 1,
-            goalsDiff: -absGoalDifference
-        })
-    ]);
+    if (isDraw) {
+        // In case of draw, both teams get 2 points and draws increment
+        await Promise.all([
+            batchUpdatePlayers(winningTeam, {
+                draws: 1,
+                points: 2,
+                goalsDiff: 0
+            }),
+            batchUpdatePlayers(losingTeam, {
+                draws: 1,
+                points: 2,
+                goalsDiff: 0
+            })
+        ]);
+    } else {
+        await Promise.all([
+            batchUpdatePlayers(winningTeam, {
+                wins: 1,
+                points: 3,
+                goalsDiff: absGoalDifference
+            }),
+            batchUpdatePlayers(losingTeam, {
+                losses: 1,
+                points: 1,
+                goalsDiff: -absGoalDifference
+            })
+        ]);
+    }
 
     const game = await prisma.games.create({
         data: { ...parsedFormData.data, season: CURRENT_SEASON }
@@ -121,13 +138,21 @@ export async function deleteGame(game: Game) {
         throw new Error('Not authorized');
     }
 
-    const { winningTeam, losingTeam } = getWinningAndLosingTeams(game);
+    const { winningTeam, losingTeam, isDraw } = getWinningAndLosingTeams(game);
     const absGoalDifference = Math.abs(game.goal_difference);
 
-    await Promise.all([
-        batchUpdatePlayers(winningTeam, { games: -1, wins: -1, points: -3, goalsDiff: -absGoalDifference }),
-        batchUpdatePlayers(losingTeam, { games: -1, losses: -1, points: -1, goalsDiff: absGoalDifference })
-    ]);
+    if (isDraw) {
+        // Reverse draw: remove 2 points and decrement draws
+        await Promise.all([
+            batchUpdatePlayers(winningTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 }),
+            batchUpdatePlayers(losingTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 })
+        ]);
+    } else {
+        await Promise.all([
+            batchUpdatePlayers(winningTeam, { games: -1, wins: -1, points: -3, goalsDiff: -absGoalDifference }),
+            batchUpdatePlayers(losingTeam, { games: -1, losses: -1, points: -1, goalsDiff: absGoalDifference })
+        ]);
+    }
 
     // Find and update any tournament matches that were using this game
     await prisma.tournament_mocamfe.updateMany({
@@ -145,13 +170,21 @@ export async function deleteGame(game: Game) {
 
 export async function updateGame(game: Game, formData: FormData) {
 
-    const { winningTeam, losingTeam } = getWinningAndLosingTeams(game);
+    const { winningTeam, losingTeam, isDraw } = getWinningAndLosingTeams(game);
     const absGoalDifference = Math.abs(game.goal_difference);
 
-    await Promise.all([
-        batchUpdatePlayers(winningTeam, { games: -1, wins: -1, points: -3, goalsDiff: -absGoalDifference }),
-        batchUpdatePlayers(losingTeam, { games: -1, losses: -1, points: -1, goalsDiff: absGoalDifference })
-    ]);
+    // Reverse the old game stats
+    if (isDraw) {
+        await Promise.all([
+            batchUpdatePlayers(winningTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 }),
+            batchUpdatePlayers(losingTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 })
+        ]);
+    } else {
+        await Promise.all([
+            batchUpdatePlayers(winningTeam, { games: -1, wins: -1, points: -3, goalsDiff: -absGoalDifference }),
+            batchUpdatePlayers(losingTeam, { games: -1, losses: -1, points: -1, goalsDiff: absGoalDifference })
+        ]);
+    }
 
     const rawFormData = {
         date: formData.get('date'),
@@ -170,13 +203,21 @@ export async function updateGame(game: Game, formData: FormData) {
         console.log(parsedFormData.error.flatten().fieldErrors);
         return;
     }
-    const { winningTeam: winningTeamUpdated, losingTeam: losingTeamUpdated } = getWinningAndLosingTeams(parsedFormData.data as Game);
+    const { winningTeam: winningTeamUpdated, losingTeam: losingTeamUpdated, isDraw: isDrawUpdated } = getWinningAndLosingTeams(parsedFormData.data as Game);
     const absGoalDifferenceUpdated = Math.abs(parsedFormData.data.goal_difference);
 
-    await Promise.all([
-        batchUpdatePlayers(winningTeamUpdated, { games: 1, wins: 1, points: 3, goalsDiff: absGoalDifferenceUpdated }),
-        batchUpdatePlayers(losingTeamUpdated, { games: 1, losses: 1, points: 1, goalsDiff: -absGoalDifferenceUpdated })
-    ]);
+    // Apply the new game stats
+    if (isDrawUpdated) {
+        await Promise.all([
+            batchUpdatePlayers(winningTeamUpdated, { games: 1, draws: 1, points: 2, goalsDiff: 0 }),
+            batchUpdatePlayers(losingTeamUpdated, { games: 1, draws: 1, points: 2, goalsDiff: 0 })
+        ]);
+    } else {
+        await Promise.all([
+            batchUpdatePlayers(winningTeamUpdated, { games: 1, wins: 1, points: 3, goalsDiff: absGoalDifferenceUpdated }),
+            batchUpdatePlayers(losingTeamUpdated, { games: 1, losses: 1, points: 1, goalsDiff: -absGoalDifferenceUpdated })
+        ]);
+    }
 
     const updatedGame = await prisma.games.update({
         where: { id: game.id },

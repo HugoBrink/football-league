@@ -5,6 +5,7 @@ export type Player = {
     games: number | null
     wins: number | null
     losses: number | null
+    draws: number | null
     goals_diff: number | null
 }
 
@@ -26,4 +27,3 @@ export type User = {
     email: string
     password: string
 }
-

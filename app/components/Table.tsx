@@ -42,6 +42,12 @@ export default function Table({ players }: { players: Player[] }) {
                                 </th>
                                 <th scope="col" className="">
                                     <div className="mobile-row">
+                                        <span className="hidden sm:inline">Empates</span>
+                                        <span className="sm:hidden">E</span>
+                                    </div>
+                                </th>
+                                <th scope="col" className="">
+                                    <div className="mobile-row">
                                         <span className="hidden sm:inline">Diferença de Golos</span>
                                         <span className="sm:hidden">DG</span>
                                     </div>
@@ -79,6 +85,9 @@ export default function Table({ players }: { players: Player[] }) {
                                     </td>
                                     <td className="whitespace-nowrap py-3 pl-6 pr-3 ">
                                         {player.losses}
+                                    </td>
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">
+                                        {player.draws}
                                     </td>
                                     <td className="whitespace-nowrap py-3 pl-6 pr-3">
                                         {player.goals_diff}

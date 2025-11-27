@@ -89,8 +89,8 @@ export async function fetchTopPlayersByPoints(limit: number = 5, season: number 
 }
 
 // Compute longest unbeaten streak per player for a season
-// Unbeaten streak = consecutive games without a loss (win or draw). In this dataset there are no explicit draws,
-// but losing team gets 1 point. We'll treat winners (3 pts) as win, losers (1 pt) as loss.
+// Unbeaten streak = consecutive games without a loss (win or draw).
+// Winners get 3 pts, losers get 1 pt, draws get 2 pts each team.
 // We infer participation from games.brancos_players and games.pretos_players (arrays of player ids as strings).
 export async function computeLongestUnbeatenStreak(season: number = CURRENT_SEASON) {
     const gamesAll = await prisma.games.findMany({ orderBy: { date: 'asc' } });
@@ -134,12 +134,15 @@ export async function computeLongestUnbeatenStreak(season: number = CURRENT_SEAS
                 }
             }
         }
+        const isDraw = game.brancos_score === game.pretos_score;
         const brancosWon = game.brancos_score > game.pretos_score;
         const pretosWon = game.pretos_score > game.brancos_score;
+        const brancosLost = game.brancos_score < game.pretos_score;
+        const pretosLost = game.pretos_score < game.brancos_score;
 
-        const applyResult = (pid: string, didWin: boolean) => {
+        const applyResult = (pid: string, didLose: boolean) => {
             const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
-            if (didWin) {
+            if (!didLose) { // Win or draw counts as unbeaten
                 if (info.current === 0) info.currentStart = game.date as unknown as Date;
                 info.current += 1;
                 info.currentEnd = game.date as unknown as Date;
@@ -161,8 +164,8 @@ export async function computeLongestUnbeatenStreak(season: number = CURRENT_SEAS
             streaks.set(pid, info);
         };
 
-        for (const pid of brancosPlayers) applyResult(pid, brancosWon);
-        for (const pid of pretosPlayers) applyResult(pid, pretosWon);
+        for (const pid of brancosPlayers) applyResult(pid, brancosLost);
+        for (const pid of pretosPlayers) applyResult(pid, pretosLost);
     }
 
     // Join with player names
@@ -221,12 +224,13 @@ export async function computeLongestLosingStreak(season: number = CURRENT_SEASON
                 }
             }
         }
+        const isDraw = game.brancos_score === game.pretos_score;
         const brancosLost = game.brancos_score < game.pretos_score;
         const pretosLost = game.pretos_score < game.brancos_score;
 
         const applyResult = (pid: string, didLose: boolean) => {
             const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
-            if (didLose) {
+            if (didLose) { // Only true losses count, draws break the streak
                 if (info.current === 0) info.currentStart = game.date as unknown as Date;
                 info.current += 1;
                 info.currentEnd = game.date as unknown as Date;
@@ -289,6 +293,7 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         gamesPlayed: number;
         wins: number;
         losses: number;
+        draws: number;
         points: number;
         goalsDiff: number;
         appearancesSorted: Date[];
@@ -311,6 +316,7 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
             gamesPlayed: 0,
             wins: p.wins ?? 0,
             losses: p.losses ?? 0,
+            draws: p.draws ?? 0,
             points: p.points ?? 0,
             goalsDiff: p.goals_diff ?? 0,
             appearancesSorted: [],
@@ -326,7 +332,7 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
     }
 
     // Build per-game participation and outcomes
-    type Appearance = { gameId: number; playerId: string; date: Date; points: number; teamGoalDiff: number; won: boolean; lost: boolean; wasCaptain: boolean };
+    type Appearance = { gameId: number; playerId: string; date: Date; points: number; teamGoalDiff: number; won: boolean; lost: boolean; drew: boolean; wasCaptain: boolean };
     const appearancesByPlayer: Record<string, Appearance[]> = {};
     const captainCounts = new Map<string, number>();
 
@@ -334,6 +340,7 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         const date = game.date as unknown as Date;
         const brancosPlayersRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
         const pretosPlayersRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
+        const isDraw = game.brancos_score === game.pretos_score;
         const brancosWon = game.brancos_score > game.pretos_score;
         const pretosWon = game.pretos_score > game.brancos_score;
         const goalDiffAbs = Math.abs(game.goal_difference);
@@ -350,17 +357,17 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         if (captainPretos) pretosSet.add(captainPretos);
 
         // Helper to push appearance
-        const push = (pid: string, won: boolean, lost: boolean, teamGD: number, wasCaptain: boolean) => {
-            const pts = won ? 3 : 1; // dataset uses 3 for winners, 1 for losers
+        const push = (pid: string, won: boolean, lost: boolean, drew: boolean, teamGD: number, wasCaptain: boolean) => {
+            const pts = drew ? 2 : (won ? 3 : 1); // 2 for draw, 3 for win, 1 for loss
             const arr = appearancesByPlayer[pid] ?? (appearancesByPlayer[pid] = []);
-            arr.push({ gameId: game.id as number, playerId: pid, date, points: pts, teamGoalDiff: teamGD, won, lost, wasCaptain });
+            arr.push({ gameId: game.id as number, playerId: pid, date, points: pts, teamGoalDiff: teamGD, won, lost, drew, wasCaptain });
         };
 
         for (const pid of brancosSet) {
-            push(pid, brancosWon, !brancosWon, game.goal_difference, captainBrancos === pid);
+            push(pid, brancosWon, !brancosWon && !isDraw, isDraw, game.goal_difference, captainBrancos === pid);
         }
         for (const pid of pretosSet) {
-            push(pid, pretosWon, !pretosWon, -game.goal_difference, captainPretos === pid);
+            push(pid, pretosWon, !pretosWon && !isDraw, isDraw, -game.goal_difference, captainPretos === pid);
         }
 
         // Mark clutch/blowout for winners/losers using sets (includes captain-only)

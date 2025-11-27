@@ -30,6 +30,7 @@ model players {
   games      Int?   @default(0) @db.SmallInt
   wins       Int?   @default(0) @db.SmallInt
   losses     Int?   @default(0) @db.SmallInt
+  draws      Int?   @default(0) @db.SmallInt
   goals_diff Int?   @default(0) @db.SmallInt
   season     Int    @default(1) @db.SmallInt
 }
