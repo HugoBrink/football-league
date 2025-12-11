@@ -134,9 +134,6 @@ export async function computeLongestUnbeatenStreak(season: number = CURRENT_SEAS
                 }
             }
         }
-        const isDraw = game.brancos_score === game.pretos_score;
-        const brancosWon = game.brancos_score > game.pretos_score;
-        const pretosWon = game.pretos_score > game.brancos_score;
         const brancosLost = game.brancos_score < game.pretos_score;
         const pretosLost = game.pretos_score < game.brancos_score;
 
@@ -224,7 +221,6 @@ export async function computeLongestLosingStreak(season: number = CURRENT_SEASON
                 }
             }
         }
-        const isDraw = game.brancos_score === game.pretos_score;
         const brancosLost = game.brancos_score < game.pretos_score;
         const pretosLost = game.pretos_score < game.brancos_score;
 
