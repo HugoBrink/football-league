@@ -1,6 +1,6 @@
 import MobileHamburger from "../components/MobileHamburger";
 import SideNav from "../components/SideNav";
-import { getAllLeagues } from "../lib/data";
+import { getAllLeagues, getLeagueSeasons } from "../lib/data";
 
 export default async function Layout({
     children,
@@ -8,13 +8,22 @@ export default async function Layout({
     children: React.ReactNode;
 }>) {
     const leagues = await getAllLeagues();
-    const leagueData = leagues.map(l => ({
-        id: l.id,
-        slug: l.slug,
-        name: l.name,
-        city: l.city,
-        current_season: l.current_season,
-    }));
+    const leagueData = await Promise.all(
+        leagues.map(async (l) => {
+            const allSeasons = await getLeagueSeasons(l.id);
+            const pastSeasons = allSeasons
+                .filter(s => s < l.current_season)
+                .sort((a, b) => b - a);
+            return {
+                id: l.id,
+                slug: l.slug,
+                name: l.name,
+                city: l.city,
+                current_season: l.current_season,
+                pastSeasons,
+            };
+        })
+    );
 
     return (
         <div className="flex sm:flex-row flex-col w-full">

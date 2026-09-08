@@ -3,7 +3,7 @@
 import { Archive, Globe, Home, List, Swords, Trophy, User, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 type League = {
     id: number;
@@ -11,14 +11,14 @@ type League = {
     name: string;
     city: string;
     current_season: number;
+    pastSeasons: number[];
 };
 
 type NavLinksProps = {
     leagues: League[];
-    pastSeasons?: number[];
 };
 
-export default function NavLinks({ leagues, pastSeasons = [] }: NavLinksProps) {
+export default function NavLinks({ leagues }: NavLinksProps) {
     const pathname = usePathname();
     const [seasonsOpen, setSeasonsOpen] = useState(false);
 
@@ -33,6 +33,13 @@ export default function NavLinks({ leagues, pastSeasons = [] }: NavLinksProps) {
         { name: 'Estatisticas', href: `/players?league=${currentLeague.slug}`, icon: User },
         { name: 'Duelos', href: `/players/duels?league=${currentLeague.slug}`, icon: Swords },
     ] : [];
+
+    // Auto-open seasons if we're on a season archive page
+    useEffect(() => {
+        if (currentLeague && pathname.includes('/season/')) {
+            setSeasonsOpen(true);
+        }
+    }, [pathname, currentLeague]);
 
     const isActive = (href: string) => {
         if (href.includes('?')) {
@@ -85,7 +92,7 @@ export default function NavLinks({ leagues, pastSeasons = [] }: NavLinksProps) {
             </Link>
 
             {/* Past seasons (collapsible) */}
-            {currentLeague && pastSeasons.length > 0 && (
+            {currentLeague && currentLeague.pastSeasons.length > 0 && (
                 <>
                     <button
                         onClick={() => setSeasonsOpen(!seasonsOpen)}
@@ -99,11 +106,11 @@ export default function NavLinks({ leagues, pastSeasons = [] }: NavLinksProps) {
                     </button>
                     {seasonsOpen && (
                         <div className="ml-7 space-y-1">
-                            {pastSeasons.map(s => (
+                            {currentLeague.pastSeasons.map(s => (
                                 <Link
                                     key={s}
                                     href={`/dashboard/${currentLeague.slug}/season/${s}`}
-                                    className={`block p-1.5 rounded-md text-sm hover:bg-gray-700 ${pathname === `/dashboard/${currentLeague.slug}/season/${s}` ? 'bg-gray-700' : ''}`}
+                                    className={`block p-1.5 rounded-md text-sm hover:bg-gray-700 ${pathname.startsWith(`/dashboard/${currentLeague.slug}/season/${s}`) ? 'bg-gray-700' : ''}`}
                                 >
                                     Season {s}
                                 </Link>

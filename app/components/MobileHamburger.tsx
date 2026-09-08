@@ -10,14 +10,14 @@ type League = {
     name: string;
     city: string;
     current_season: number;
+    pastSeasons: number[];
 };
 
 type Props = {
     leagues: League[];
-    pastSeasons?: number[];
 };
 
-export default function MobileHamburger({ leagues, pastSeasons = [] }: Props) {
+export default function MobileHamburger({ leagues }: Props) {
     const [open, setOpen] = useState(false)
 
     return (
@@ -43,7 +43,7 @@ export default function MobileHamburger({ leagues, pastSeasons = [] }: Props) {
                             </button>
                         </div>
                         <div className="space-y-1" onClick={() => setOpen(false)}>
-                            <NavLinks leagues={leagues} pastSeasons={pastSeasons} />
+                            <NavLinks leagues={leagues} />
                         </div>
                     </div>
                 </div>
