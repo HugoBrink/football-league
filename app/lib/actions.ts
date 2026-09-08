@@ -59,6 +59,23 @@ export async function createPlayerInline(leagueSlug: string, name: string): Prom
     return { id: String(player.id), name: player.name };
 }
 
+export async function importPlayerFromOtherLeague(leagueSlug: string, playerName: string) {
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
+
+    const existing = await prisma.players.findFirst({
+        where: { name: playerName, season: league.current_season, league_id: league.id }
+    });
+    if (existing) throw new Error('Player already exists in this league');
+
+    await prisma.players.create({
+        data: { name: playerName, season: league.current_season, league_id: league.id, points: 0, games: 0, wins: 0, losses: 0, draws: 0, goals_diff: 0 }
+    });
+
+    revalidatePath(`/dashboard/${leagueSlug}`);
+    revalidatePath(`/dashboard/${leagueSlug}/players/create`);
+}
+
 export async function deletePlayer(id: string) {
     return prisma.players.delete({ where: { id: BigInt(id) } });
 }

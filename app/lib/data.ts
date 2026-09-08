@@ -21,6 +21,37 @@ export async function getLeagueSeasons(leagueId: number) {
     return seasons.map(s => s.season);
 }
 
+// Fetch players from other leagues that don't exist yet in this league's current season
+export async function fetchImportablePlayers(season: number, leagueId: number) {
+    const currentNames = await prisma.players.findMany({
+        where: { season, league_id: leagueId },
+        select: { name: true }
+    });
+    const currentNameSet = new Set(currentNames.map(p => p.name));
+
+    const otherPlayers = await prisma.players.findMany({
+        where: { league_id: { not: leagueId } },
+        select: { name: true, league_id: true },
+        distinct: ['name', 'league_id'],
+        orderBy: { name: 'asc' }
+    });
+
+    const leagues = await prisma.leagues.findMany();
+    const leagueMap = new Map(leagues.map(l => [l.id, l.name]));
+
+    const importable = otherPlayers
+        .filter(p => !currentNameSet.has(p.name))
+        .map(p => ({ name: p.name, fromLeague: leagueMap.get(p.league_id) ?? 'Desconhecida' }));
+
+    // Deduplicate by name (player might exist in multiple seasons of same league)
+    const seen = new Set<string>();
+    return importable.filter(p => {
+        if (seen.has(p.name)) return false;
+        seen.add(p.name);
+        return true;
+    });
+}
+
 // Player data
 export async function fetchPlayers(season: number, leagueId: number) {
     return prisma.players.findMany({
