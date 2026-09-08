@@ -38,7 +38,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-semibold">{league.name} — Season {season} — Destaques</h2>
-                    <p className="text-sm text-gray-500">Estatisticas calculadas a partir de vitorias, pontos e goal difference.</p>
+                    <p className="text-sm text-gray-600">Estatisticas calculadas a partir de vitorias, pontos e goal difference.</p>
                 </div>
                 <SeasonSelect season={season} seasons={seasonsList} />
             </div>
@@ -51,7 +51,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                             <div className="text-lg font-semibold">{bestUnbeaten.name}</div>
                             <div className="text-gray-600">{bestUnbeaten.bestStreak} jogos</div>
                             {bestUnbeaten.startDate && bestUnbeaten.endDate && (
-                                <div className="text-sm text-gray-500">
+                                <div className="text-sm text-gray-600">
                                     {new Date(bestUnbeaten.startDate).toLocaleDateString()} — {new Date(bestUnbeaten.endDate).toLocaleDateString()}
                                 </div>
                             )}
@@ -66,7 +66,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                             <div className="text-lg font-semibold">{worstLosing.name}</div>
                             <div className="text-gray-600">{worstLosing.bestStreak} jogos</div>
                             {worstLosing.startDate && worstLosing.endDate && (
-                                <div className="text-sm text-gray-500">
+                                <div className="text-sm text-gray-600">
                                     {new Date(worstLosing.startDate).toLocaleDateString()} — {new Date(worstLosing.endDate).toLocaleDateString()}
                                 </div>
                             )}

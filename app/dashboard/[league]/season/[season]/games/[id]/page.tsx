@@ -26,7 +26,7 @@ export default async function Page({ params }: { params: Promise<{ id: string; s
                 </Link>
                 <h1>Jogo #{game.numero}</h1>
             </div>
-            <p className="text-gray-400 text-sm">Data: {new Date(game.date).toLocaleDateString('pt-PT')}</p>
+            <p className="text-gray-600 text-sm">Data: {new Date(game.date).toLocaleDateString('pt-PT')}</p>
             <div className="grid grid-cols-2 gap-8 text-left">
                 <div className="flex flex-col items-center justify-center gap-2">
                     <p className="font-bold pb-4">Brancos</p>

@@ -124,7 +124,7 @@ export default function TournamentBracket({ matches, players, onCreateBracket }:
                                                     <Trophy className="w-4 h-4" />
                                                 )}
                                             </div>
-                                            <div className="text-xs text-center text-gray-400">vs</div>
+                                            <div className="text-xs text-center text-gray-500">vs</div>
                                             <div className={`flex items-center justify-between ${match.winner_id === match.opponent_id ? 'text-green-600 font-bold' : ''}`}>
                                                 <span>{getPlayerName(match.opponent_id)}</span>
                                                 {match.winner_id === match.opponent_id && (

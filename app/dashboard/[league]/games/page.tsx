@@ -29,9 +29,9 @@ export default async function Games({ params }: { params: Promise<{ league: stri
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {games.map((game: any) => (
                     <Link key={game.id} href={`/dashboard/${leagueSlug}/games/${game.id}`}>
-                        <div className="flex flex-col w-full border-2 border-gray-300 rounded-lg p-4 items-center min-w-32 min-h-32">
-                            <p>Jogo numero: {game.numero}</p>
-                            <p className="text-sm text-gray-500">{new Date(game.date).toLocaleDateString('pt-PT')}</p>
+                        <div className="flex flex-col w-full border-2 border-gray-300 bg-white rounded-lg p-4 items-center min-w-32 min-h-32">
+                            <p className="text-gray-900 font-medium">Jogo numero: {game.numero}</p>
+                            <p className="text-sm text-gray-600">{new Date(game.date).toLocaleDateString('pt-PT')}</p>
                             <div className="flex sm:flex-row flex-col items-center sm:gap-2">
                                 <p className="whitespace-nowrap">{playerMap.get(BigInt(game.brancos_captain ?? '0')) ?? '-'}</p> vs
                                 <p>{playerMap.get(BigInt(game.pretos_captain ?? '0')) ?? '-'}</p>

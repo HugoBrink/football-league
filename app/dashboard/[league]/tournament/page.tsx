@@ -30,7 +30,7 @@ export default async function TournamentPage({ params }: { params: Promise<{ lea
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-semibold">Taca — {league.name} Season {league.current_season}</h2>
-                    <p className="text-sm text-gray-500">Torneio eliminatorio 1v1</p>
+                    <p className="text-sm text-gray-600">Torneio eliminatorio 1v1</p>
                 </div>
                 {session?.user && matches.length > 0 && (
                     <ClearTournamentButton leagueSlug={leagueSlug} />

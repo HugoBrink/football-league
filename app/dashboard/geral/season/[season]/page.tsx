@@ -12,8 +12,8 @@ export default async function GlobalStandingsSeason({ params }: { params: Promis
         <div>
             <div className="flex justify-between items-center w-full sm:pt-0 px-6 pt-4">
                 <div className="gap-2 flex flex-col items-center">
-                    <h1>Classificacao Geral — Season {seasonNumber}</h1>
-                    <p className="text-sm text-gray-500">Todas as ligas combinadas (arquivo)</p>
+                    <h1 className="text-gray-900">Classificacao Geral — Season {seasonNumber}</h1>
+                    <p className="text-sm text-gray-600">Todas as ligas combinadas (arquivo)</p>
                 </div>
             </div>
             <div className="mt-6">

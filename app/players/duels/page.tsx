@@ -42,7 +42,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-semibold">{league.name} — Duels Season {season}</h2>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-600">
                         Compare dois jogadores: jogos juntos e contra, e companheiros mais frequentes.
                     </p>
                 </div>
