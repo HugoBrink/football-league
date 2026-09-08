@@ -4,7 +4,7 @@ import Add from "@/app/components/Add";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
-import StartNewSeasonButton from "./StartNewSeasonButton";
+import AdminMenu from "./AdminMenu";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ league: string }> }) {
     const { league: leagueSlug } = await params;
@@ -30,7 +30,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ le
                     <Add type="players" leagueSlug={leagueSlug} />
                     <Add type="games" leagueSlug={leagueSlug} />
                     {session?.user && (
-                        <StartNewSeasonButton leagueSlug={leagueSlug} currentSeason={league.current_season} />
+                        <AdminMenu leagueSlug={leagueSlug} currentSeason={league.current_season} />
                     )}
                 </div>
             </div>
