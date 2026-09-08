@@ -4,7 +4,20 @@ import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import NavLinks from './NavLinks'
 
-export default function MobileHamburger() {
+type League = {
+    id: number;
+    slug: string;
+    name: string;
+    city: string;
+    current_season: number;
+};
+
+type Props = {
+    leagues: League[];
+    pastSeasons?: number[];
+};
+
+export default function MobileHamburger({ leagues, pastSeasons = [] }: Props) {
     const [open, setOpen] = useState(false)
 
     return (
@@ -24,17 +37,17 @@ export default function MobileHamburger() {
                 <div className={`absolute top-0 left-0 h-full w-4/5 max-w-xs transform transition-transform ${open ? 'translate-x-0' : '-translate-x-full'}`}>
                     <div className="h-full bg-gray-800 text-white shadow-xl p-4 flex flex-col">
                         <div className="flex items-center justify-between mb-3">
-                            <div className="text-lg font-semibold">Navegação</div>
+                            <div className="text-lg font-semibold">Navegacao</div>
                             <button aria-label="Close menu" onClick={() => setOpen(false)} className="p-2 rounded bg-gray-700 hover:bg-gray-600">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="space-y-1" onClick={() => setOpen(false)}>
-                            <NavLinks />
+                            <NavLinks leagues={leagues} pastSeasons={pastSeasons} />
                         </div>
                     </div>
                 </div>
             </div>
         </>
-    )
+    );
 }

@@ -1,0 +1,62 @@
+import { AggregatedPlayer } from "@/app/lib/definitions";
+
+const LEAGUE_COLORS: Record<string, string> = {
+    porto: 'bg-blue-100 text-blue-800',
+    lisboa: 'bg-green-100 text-green-800',
+};
+
+export default function GlobalTable({ standings }: { standings: AggregatedPlayer[] }) {
+    return (
+        <div className="mt-6">
+            <div className="inline-block min-w-full align-middle">
+                <div className="sm:rounded-lg bg-gray-50 py-4 cursor-default">
+                    <table className="min-w-full text-gray-900">
+                        <thead className="rounded-lg text-left text-sm font-normal">
+                            <tr>
+                                <th scope="col" className="font-medium"></th>
+                                <th scope="col"><div className="mobile-row">Nome</div></th>
+                                <th scope="col"><div className="mobile-row">Ligas</div></th>
+                                <th scope="col" className="mobile-row">
+                                    <span className="hidden sm:inline">Pontos</span>
+                                    <span className="sm:hidden">P</span>
+                                </th>
+                                <th scope="col"><div className="mobile-row"><span className="hidden sm:inline">Jogos</span><span className="sm:hidden">J</span></div></th>
+                                <th scope="col"><div className="mobile-row"><span className="hidden sm:inline">Vitórias</span><span className="sm:hidden">V</span></div></th>
+                                <th scope="col"><div className="mobile-row"><span className="hidden sm:inline">Derrotas</span><span className="sm:hidden">D</span></div></th>
+                                <th scope="col"><div className="mobile-row"><span className="hidden sm:inline">Empates</span><span className="sm:hidden">E</span></div></th>
+                                <th scope="col"><div className="mobile-row"><span className="hidden sm:inline">Dif. Golos</span><span className="sm:hidden">DG</span></div></th>
+                                <th scope="col"><div className="mobile-row"><span className="hidden sm:inline">% Vitórias</span><span className="sm:hidden">%V</span></div></th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white">
+                            {standings.map((player, index) => (
+                                <tr key={player.name} className="w-full border-b py-3 text-sm last-of-type:border-none [&:first-child>td:first-child]:rounded-tl-lg [&:first-child>td:last-child]:rounded-tr-lg [&:last-child>td:first-child]:rounded-bl-lg [&:last-child>td:last-child]:rounded-br-lg">
+                                    <td className="whitespace-nowrap py-3 sm:pl-6 pl-2 sm:pr-3 font-bold">{index + 1}</td>
+                                    <td className="whitespace-nowrap py-3 pl-1 pr-3"><p>{player.name}</p></td>
+                                    <td className="whitespace-nowrap py-3 px-2">
+                                        <div className="flex gap-1">
+                                            {player.leagues.map(l => (
+                                                <span key={l} className={`px-1.5 py-0.5 rounded text-xs font-medium ${LEAGUE_COLORS[l] ?? 'bg-gray-100 text-gray-800'}`}>
+                                                    {l.charAt(0).toUpperCase() + l.slice(1)}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3">{player.points}</td>
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">{player.games}</td>
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">{player.wins}</td>
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">{player.losses}</td>
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">{player.draws}</td>
+                                    <td className="whitespace-nowrap py-3 pl-6 pr-3">{player.goals_diff}</td>
+                                    <td className="whitespace-nowrap py-3">
+                                        {player.wins && player.games ? (player.wins / player.games * 100).toFixed(2) + '%' : '0.00%'}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+}

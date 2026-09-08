@@ -1,188 +1,142 @@
 import prisma from "./client";
 
-export const CURRENT_SEASON = 2;
+export const DEFAULT_SEASON = 3;
 
-// Pure data access functions
-export async function fetchPlayers(season: number = CURRENT_SEASON) {
-    const all = await prisma.players.findMany({
-        orderBy: [
-            { points: 'desc' },
-            { goals_diff: 'desc' }
-        ]
-    });
-    return all.filter(p => (p as any).season === season);
+// League helpers
+export async function getLeagueBySlug(slug: string) {
+    return prisma.leagues.findUnique({ where: { slug } });
 }
 
-export async function fetchPlayersNames(season: number = CURRENT_SEASON) {
-    const all = await prisma.players.findMany({
+export async function getAllLeagues() {
+    return prisma.leagues.findMany({ orderBy: { id: 'asc' } });
+}
+
+export async function getLeagueSeasons(leagueId: number) {
+    const seasons = await prisma.games.findMany({
+        where: { league_id: leagueId },
+        select: { season: true },
+        distinct: ['season'],
+        orderBy: { season: 'desc' }
+    });
+    return seasons.map(s => s.season);
+}
+
+// Player data
+export async function fetchPlayers(season: number, leagueId: number) {
+    return prisma.players.findMany({
+        where: { season, league_id: leagueId },
+        orderBy: [{ points: 'desc' }, { goals_diff: 'desc' }]
+    });
+}
+
+export async function fetchPlayersNames(season: number, leagueId: number) {
+    const players = await prisma.players.findMany({
+        where: { season, league_id: leagueId },
         orderBy: { points: 'desc' }
     });
-    return all
-        .filter(p => (p as any).season === season)
-        .map(p => ({ id: (p as any).id, name: (p as any).name } as any));
+    return players.map(p => ({ id: p.id, name: p.name }));
 }
 
 export async function getPlayerById(id: string) {
-    return await prisma.players.findUnique({
-        where: { id: BigInt(id) }
-    });
+    return prisma.players.findUnique({ where: { id: BigInt(id) } });
 }
 
-export async function fetchGames(season: number = CURRENT_SEASON) {
-    const all = await prisma.games.findMany({ orderBy: { date: 'desc' } });
-    return all.filter(g => (g as any).season === season);
+// Game data
+export async function fetchGames(season: number, leagueId: number) {
+    return prisma.games.findMany({
+        where: { season, league_id: leagueId },
+        orderBy: { date: 'desc' }
+    });
 }
 
 export async function fetchGame(id: string) {
-    const game = await prisma.games.findUnique({
-        where: { id: Number(id) }
-    });
+    const game = await prisma.games.findUnique({ where: { id: Number(id) } });
     if (game) {
-        return { ...game, brancos_players: game.brancos_players as any, pretos_players: game.pretos_players as any }
+        return { ...game, brancos_players: game.brancos_players as any, pretos_players: game.pretos_players as any };
     }
-    return null
+    return null;
 }
 
 // Stats helpers
-export async function fetchTopPlayersByWins(limit: number = 5, season: number = CURRENT_SEASON) {
-    const all = await prisma.players.findMany({
-        orderBy: [
-            { wins: 'desc' },
-            { points: 'desc' },
-            { goals_diff: 'desc' }
-        ]
+export async function fetchTopPlayersByWins(limit: number = 5, season: number, leagueId: number) {
+    return prisma.players.findMany({
+        where: { season, league_id: leagueId },
+        orderBy: [{ wins: 'desc' }, { points: 'desc' }, { goals_diff: 'desc' }],
+        take: limit
     });
-    return all.filter(p => (p as any).season === season).slice(0, limit);
-}
-export async function fetchTopPlayersByGoalsDiff(
-  limit: number = 5,
-  season: number = CURRENT_SEASON
-) {
-  const all = await prisma.players.findMany({
-    where: {
-      season: season,
-      games: { gte: 5 }, // só jogadores com >= 5 jogos
-    },
-    orderBy: [
-      { goals_diff: 'desc' },
-      { points: 'desc' },
-      { wins: 'desc' },
-    ],
-    take: limit, // já corta no SQL
-  });
-
-  return all;
 }
 
-export async function fetchTopPlayersByPoints(limit: number = 5, season: number = CURRENT_SEASON) {
-    const all = await prisma.players.findMany({
-        orderBy: [
-            { points: 'desc' },
-            { wins: 'desc' },
-            { goals_diff: 'desc' }
-        ]
+export async function fetchTopPlayersByGoalsDiff(limit: number = 5, season: number, leagueId: number) {
+    return prisma.players.findMany({
+        where: { season, league_id: leagueId, games: { gte: 5 } },
+        orderBy: [{ goals_diff: 'desc' }, { points: 'desc' }, { wins: 'desc' }],
+        take: limit
     });
-    return all
-        .filter(p => (p as any).season === season)
-        .filter(p => (p.points ?? 0) > 0)
-        .slice(0, limit);
 }
 
-// Compute longest unbeaten streak per player for a season
-// Unbeaten streak = consecutive games without a loss (win or draw).
-// Winners get 3 pts, losers get 1 pt, draws get 2 pts each team.
-// We infer participation from games.brancos_players and games.pretos_players (arrays of player ids as strings).
-export async function computeLongestUnbeatenStreak(season: number = CURRENT_SEASON) {
-    const gamesAll = await prisma.games.findMany({ orderBy: { date: 'asc' } });
-    const games = gamesAll.filter(g => (g as any).season === season);
+export async function fetchTopPlayersByPoints(limit: number = 5, season: number, leagueId: number) {
+    return prisma.players.findMany({
+        where: { season, league_id: leagueId, points: { gt: 0 } },
+        orderBy: [{ points: 'desc' }, { wins: 'desc' }, { goals_diff: 'desc' }],
+        take: limit
+    });
+}
 
-    type StreakInfo = {
-        current: number;
-        best: number;
-        currentStart: Date | null;
-        currentEnd: Date | null;
-        bestStart: Date | null;
-        bestEnd: Date | null;
+// Global standings (cross-league)
+export async function fetchGlobalStandings(season: number) {
+    const allPlayers = await prisma.players.findMany({
+        where: { season },
+        orderBy: [{ points: 'desc' }, { goals_diff: 'desc' }]
+    });
+
+    const leagues = await prisma.leagues.findMany();
+    const leagueMap = new Map(leagues.map(l => [l.id, l.slug]));
+
+    type AggregatedPlayer = {
+        name: string;
+        points: number;
+        games: number;
+        wins: number;
+        losses: number;
+        draws: number;
+        goals_diff: number;
+        leagues: string[];
     };
-    const streaks = new Map<string, StreakInfo>(); // key: playerId string
 
-    for (const game of games) {
-        const brancosPlayersBase: string[] = (game.brancos_players as any[])?.map(String) ?? [];
-        const pretosPlayersBase: string[] = (game.pretos_players as any[])?.map(String) ?? [];
-        const brancosCaptain = (game as any).brancos_captain != null ? String((game as any).brancos_captain) : null;
-        const pretosCaptain = (game as any).pretos_captain != null ? String((game as any).pretos_captain) : null;
-        const brancosPlayers = new Set<string>(brancosPlayersBase);
-        const pretosPlayers = new Set<string>(pretosPlayersBase);
-        if (brancosCaptain) brancosPlayers.add(brancosCaptain);
-        if (pretosCaptain) pretosPlayers.add(pretosCaptain);
-
-        // Resolve any accidental overlaps deterministically
-        for (const pid of Array.from(brancosPlayers)) {
-            if (pretosPlayers.has(pid)) {
-                const inBrancosArray = brancosPlayersBase.includes(pid);
-                const inPretosArray = pretosPlayersBase.includes(pid);
-                if (inBrancosArray && !inPretosArray) {
-                    pretosPlayers.delete(pid);
-                } else if (!inBrancosArray && inPretosArray) {
-                    brancosPlayers.delete(pid);
-                } else if (brancosCaptain === pid && pretosCaptain !== pid) {
-                    pretosPlayers.delete(pid);
-                } else if (pretosCaptain === pid && brancosCaptain !== pid) {
-                    brancosPlayers.delete(pid);
-                } else {
-                    pretosPlayers.delete(pid);
-                }
-            }
+    const aggregated = new Map<string, AggregatedPlayer>();
+    for (const p of allPlayers) {
+        const leagueSlug = leagueMap.get(p.league_id) ?? 'unknown';
+        const existing = aggregated.get(p.name);
+        if (existing) {
+            existing.points += p.points ?? 0;
+            existing.games += p.games ?? 0;
+            existing.wins += p.wins ?? 0;
+            existing.losses += p.losses ?? 0;
+            existing.draws += p.draws ?? 0;
+            existing.goals_diff += p.goals_diff ?? 0;
+            if (!existing.leagues.includes(leagueSlug)) existing.leagues.push(leagueSlug);
+        } else {
+            aggregated.set(p.name, {
+                name: p.name,
+                points: p.points ?? 0,
+                games: p.games ?? 0,
+                wins: p.wins ?? 0,
+                losses: p.losses ?? 0,
+                draws: p.draws ?? 0,
+                goals_diff: p.goals_diff ?? 0,
+                leagues: [leagueSlug],
+            });
         }
-        const brancosLost = game.brancos_score < game.pretos_score;
-        const pretosLost = game.pretos_score < game.brancos_score;
-
-        const applyResult = (pid: string, didLose: boolean) => {
-            const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
-            if (!didLose) { // Win or draw counts as unbeaten
-                if (info.current === 0) info.currentStart = game.date as unknown as Date;
-                info.current += 1;
-                info.currentEnd = game.date as unknown as Date;
-            } else {
-                if (info.current > info.best) {
-                    info.best = info.current;
-                    info.bestStart = info.currentStart;
-                    info.bestEnd = info.currentEnd;
-                }
-                info.current = 0;
-                info.currentStart = null;
-                info.currentEnd = null;
-            }
-            if (info.current > info.best) {
-                info.best = info.current;
-                info.bestStart = info.currentStart;
-                info.bestEnd = info.currentEnd;
-            }
-            streaks.set(pid, info);
-        };
-
-        for (const pid of brancosPlayers) applyResult(pid, brancosLost);
-        for (const pid of pretosPlayers) applyResult(pid, pretosLost);
     }
-
-    // Join with player names
-    const players = (await prisma.players.findMany()).filter(p => (p as any).season === season);
-    const withNames = players.map(p => ({
-        id: String(p.id),
-        name: p.name,
-        bestStreak: streaks.get(String(p.id))?.best ?? 0,
-        startDate: streaks.get(String(p.id))?.bestStart ?? null,
-        endDate: streaks.get(String(p.id))?.bestEnd ?? null,
-    }));
-
-    withNames.sort((a, b) => b.bestStreak - a.bestStreak || a.name.localeCompare(b.name));
-    return withNames;
+    return [...aggregated.values()].sort((a, b) => b.points - a.points || b.goals_diff - a.goals_diff);
 }
 
-// Compute longest losing streak per player for a season
-export async function computeLongestLosingStreak(season: number = CURRENT_SEASON) {
-    const gamesAll = await prisma.games.findMany({ orderBy: { date: 'asc' } });
-    const games = gamesAll.filter(g => (g as any).season === season);
+// Streak computations
+export async function computeLongestUnbeatenStreak(season: number, leagueId: number) {
+    const games = await prisma.games.findMany({
+        where: { season, league_id: leagueId },
+        orderBy: { date: 'asc' }
+    });
 
     type StreakInfo = {
         current: number;
@@ -197,8 +151,8 @@ export async function computeLongestLosingStreak(season: number = CURRENT_SEASON
     for (const game of games) {
         const brancosPlayersBase: string[] = (game.brancos_players as any[])?.map(String) ?? [];
         const pretosPlayersBase: string[] = (game.pretos_players as any[])?.map(String) ?? [];
-        const brancosCaptain = (game as any).brancos_captain != null ? String((game as any).brancos_captain) : null;
-        const pretosCaptain = (game as any).pretos_captain != null ? String((game as any).pretos_captain) : null;
+        const brancosCaptain = game.brancos_captain != null ? String(game.brancos_captain) : null;
+        const pretosCaptain = game.pretos_captain != null ? String(game.pretos_captain) : null;
         const brancosPlayers = new Set<string>(brancosPlayersBase);
         const pretosPlayers = new Set<string>(pretosPlayersBase);
         if (brancosCaptain) brancosPlayers.add(brancosCaptain);
@@ -226,7 +180,7 @@ export async function computeLongestLosingStreak(season: number = CURRENT_SEASON
 
         const applyResult = (pid: string, didLose: boolean) => {
             const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
-            if (didLose) { // Only true losses count, draws break the streak
+            if (!didLose) {
                 if (info.current === 0) info.currentStart = game.date as unknown as Date;
                 info.current += 1;
                 info.currentEnd = game.date as unknown as Date;
@@ -252,7 +206,7 @@ export async function computeLongestLosingStreak(season: number = CURRENT_SEASON
         for (const pid of pretosPlayers) applyResult(pid, pretosLost);
     }
 
-    const players = (await prisma.players.findMany()).filter(p => (p as any).season === season);
+    const players = await prisma.players.findMany({ where: { season, league_id: leagueId } });
     const withNames = players.map(p => ({
         id: String(p.id),
         name: p.name,
@@ -265,23 +219,99 @@ export async function computeLongestLosingStreak(season: number = CURRENT_SEASON
     return withNames;
 }
 
-// Compute multiple player-level metrics from games
-export async function computeSeasonStats(season: number = CURRENT_SEASON) {
-    const [players, gamesAll] = await Promise.all([
-        prisma.players.findMany(),
-        prisma.games.findMany({ orderBy: { date: 'asc' } })
-    ]);
-    const seasonPlayers = players.filter(p => (p as any).season === season);
-    const games = gamesAll.filter(g => (g as any).season === season);
+export async function computeLongestLosingStreak(season: number, leagueId: number) {
+    const games = await prisma.games.findMany({
+        where: { season, league_id: leagueId },
+        orderBy: { date: 'asc' }
+    });
 
-    // Aggregate totals across all seasons by player name (global career-like totals)
-    const totalsByName = new Map<string, { wins: number; games: number }>();
-    for (const p of players) {
-        const t = totalsByName.get(p.name) ?? { wins: 0, games: 0 };
-        t.wins += p.wins ?? 0;
-        t.games += p.games ?? 0;
-        totalsByName.set(p.name, t);
+    type StreakInfo = {
+        current: number;
+        best: number;
+        currentStart: Date | null;
+        currentEnd: Date | null;
+        bestStart: Date | null;
+        bestEnd: Date | null;
+    };
+    const streaks = new Map<string, StreakInfo>();
+
+    for (const game of games) {
+        const brancosPlayersBase: string[] = (game.brancos_players as any[])?.map(String) ?? [];
+        const pretosPlayersBase: string[] = (game.pretos_players as any[])?.map(String) ?? [];
+        const brancosCaptain = game.brancos_captain != null ? String(game.brancos_captain) : null;
+        const pretosCaptain = game.pretos_captain != null ? String(game.pretos_captain) : null;
+        const brancosPlayers = new Set<string>(brancosPlayersBase);
+        const pretosPlayers = new Set<string>(pretosPlayersBase);
+        if (brancosCaptain) brancosPlayers.add(brancosCaptain);
+        if (pretosCaptain) pretosPlayers.add(pretosCaptain);
+
+        for (const pid of Array.from(brancosPlayers)) {
+            if (pretosPlayers.has(pid)) {
+                const inBrancosArray = brancosPlayersBase.includes(pid);
+                const inPretosArray = pretosPlayersBase.includes(pid);
+                if (inBrancosArray && !inPretosArray) {
+                    pretosPlayers.delete(pid);
+                } else if (!inBrancosArray && inPretosArray) {
+                    brancosPlayers.delete(pid);
+                } else if (brancosCaptain === pid && pretosCaptain !== pid) {
+                    pretosPlayers.delete(pid);
+                } else if (pretosCaptain === pid && brancosCaptain !== pid) {
+                    brancosPlayers.delete(pid);
+                } else {
+                    pretosPlayers.delete(pid);
+                }
+            }
+        }
+        const brancosLost = game.brancos_score < game.pretos_score;
+        const pretosLost = game.pretos_score < game.brancos_score;
+
+        const applyResult = (pid: string, didLose: boolean) => {
+            const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
+            if (didLose) {
+                if (info.current === 0) info.currentStart = game.date as unknown as Date;
+                info.current += 1;
+                info.currentEnd = game.date as unknown as Date;
+            } else {
+                if (info.current > info.best) {
+                    info.best = info.current;
+                    info.bestStart = info.currentStart;
+                    info.bestEnd = info.currentEnd;
+                }
+                info.current = 0;
+                info.currentStart = null;
+                info.currentEnd = null;
+            }
+            if (info.current > info.best) {
+                info.best = info.current;
+                info.bestStart = info.currentStart;
+                info.bestEnd = info.currentEnd;
+            }
+            streaks.set(pid, info);
+        };
+
+        for (const pid of brancosPlayers) applyResult(pid, brancosLost);
+        for (const pid of pretosPlayers) applyResult(pid, pretosLost);
     }
+
+    const players = await prisma.players.findMany({ where: { season, league_id: leagueId } });
+    const withNames = players.map(p => ({
+        id: String(p.id),
+        name: p.name,
+        bestStreak: streaks.get(String(p.id))?.best ?? 0,
+        startDate: streaks.get(String(p.id))?.bestStart ?? null,
+        endDate: streaks.get(String(p.id))?.bestEnd ?? null,
+    }));
+
+    withNames.sort((a, b) => b.bestStreak - a.bestStreak || a.name.localeCompare(b.name));
+    return withNames;
+}
+
+// Season stats computation
+export async function computeSeasonStats(season: number, leagueId: number) {
+    const [players, games] = await Promise.all([
+        prisma.players.findMany({ where: { season, league_id: leagueId } }),
+        prisma.games.findMany({ where: { season, league_id: leagueId }, orderBy: { date: 'asc' } })
+    ]);
 
     type PerPlayer = {
         id: string;
@@ -294,18 +324,18 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         goalsDiff: number;
         appearancesSorted: Date[];
         last5Points: number;
-        clutchWins: number; // wins by 1 goal
-        blowoutWins: number; // wins by >=3
-        blowoutLosses: number; // losses by >=3
+        clutchWins: number;
+        blowoutWins: number;
+        blowoutLosses: number;
         longestConsecAppearances: number;
-        consistencyStdDev: number | null; // stdev of team goal diff in games played
+        consistencyStdDev: number | null;
         captainWins: number;
         captainGames: number;
     };
 
     const perPlayer = new Map<string, PerPlayer>();
 
-    for (const p of seasonPlayers) {
+    for (const p of players) {
         perPlayer.set(String(p.id), {
             id: String(p.id),
             name: p.name,
@@ -327,7 +357,6 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         });
     }
 
-    // Build per-game participation and outcomes
     type Appearance = { gameId: number; playerId: string; date: Date; points: number; teamGoalDiff: number; won: boolean; lost: boolean; drew: boolean; wasCaptain: boolean };
     const appearancesByPlayer: Record<string, Appearance[]> = {};
     const captainCounts = new Map<string, number>();
@@ -346,15 +375,13 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         if (captainBrancos) captainCounts.set(captainBrancos, (captainCounts.get(captainBrancos) ?? 0) + 1);
         if (captainPretos) captainCounts.set(captainPretos, (captainCounts.get(captainPretos) ?? 0) + 1);
 
-        // Build unique rosters including captains
         const brancosSet = new Set<string>(brancosPlayersRaw);
         const pretosSet = new Set<string>(pretosPlayersRaw);
         if (captainBrancos) brancosSet.add(captainBrancos);
         if (captainPretos) pretosSet.add(captainPretos);
 
-        // Helper to push appearance
         const push = (pid: string, won: boolean, lost: boolean, drew: boolean, teamGD: number, wasCaptain: boolean) => {
-            const pts = drew ? 2 : (won ? 3 : 1); // 2 for draw, 3 for win, 1 for loss
+            const pts = drew ? 2 : (won ? 3 : 1);
             const arr = appearancesByPlayer[pid] ?? (appearancesByPlayer[pid] = []);
             arr.push({ gameId: game.id as number, playerId: pid, date, points: pts, teamGoalDiff: teamGD, won, lost, drew, wasCaptain });
         };
@@ -366,7 +393,6 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
             push(pid, pretosWon, !pretosWon && !isDraw, isDraw, -game.goal_difference, captainPretos === pid);
         }
 
-        // Mark clutch/blowout for winners/losers using sets (includes captain-only)
         if (goalDiffAbs === 1) {
             for (const pid of brancosWon ? brancosSet : pretosSet) {
                 const pp = perPlayer.get(pid); if (pp) pp.clutchWins += 1;
@@ -382,19 +408,15 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         }
     }
 
-    // Determine last 5 games overall in this season
     const lastFiveGameIds = new Set(games.slice(-5).map(g => g.id as number));
 
-    // Aggregate per player
     for (const [pid, list] of Object.entries(appearancesByPlayer)) {
         list.sort((a, b) => a.date.getTime() - b.date.getTime());
         const pp = perPlayer.get(pid);
         if (!pp) continue;
         pp.gamesPlayed = list.length;
         pp.appearancesSorted = list.map(a => a.date);
-        // Sum points from the last 5 games overall, not last 5 appearances
         pp.last5Points = list.reduce((s, a) => s + (lastFiveGameIds.has(a.gameId) ? a.points : 0), 0);
-        // Prefer authoritative count from games' captain fields (handles legacy data where captain might not be listed in players arrays)
         pp.captainGames = captainCounts.get(pid) ?? list.filter(a => a.wasCaptain).length;
         pp.captainWins = list.filter(a => a.wasCaptain && a.won).length;
         if (list.length > 0) {
@@ -403,33 +425,18 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
             pp.consistencyStdDev = Math.sqrt(variance);
         }
 
-        // Longest consecutive appearances (by date order; assumes unique game dates)
         let best = 0; let cur = 0;
-        let prevTime: number | null = null;
-        for (const a of list) {
-            const t = a.date.getTime();
-            if (prevTime == null) {
-                cur = 1; best = Math.max(best, cur);
-            } else {
-                // if next appearance is next chronological game they played; since we don't have global round numbers,
-                // we consider any subsequent game they appear in as consecutive within their personal sequence
-                cur += 1; best = Math.max(best, cur);
-            }
-            prevTime = t;
+        for (let i = 0; i < list.length; i++) {
+            cur += 1; best = Math.max(best, cur);
         }
         pp.longestConsecAppearances = best;
     }
 
-    // Prepare leaderboards
     const entries = Array.from(perPlayer.values());
 
     const byWinRate = entries
         .filter(e => e.gamesPlayed >= 5)
-        .map(e => {
-            // Use only current season's data
-            const winRate = e.gamesPlayed > 0 ? e.wins / e.gamesPlayed : 0;
-            return { name: e.name, id: e.id, winRate };
-        })
+        .map(e => ({ name: e.name, id: e.id, winRate: e.gamesPlayed > 0 ? e.wins / e.gamesPlayed : 0 }))
         .sort((a, b) => b.winRate - a.winRate);
 
     const byAvgGD = entries
@@ -482,16 +489,7 @@ export async function computeSeasonStats(season: number = CURRENT_SEASON) {
         .sort((a, b) => a.goalsDiff - b.goalsDiff);
 
     return {
-        byWinRate,
-        byAvgGD,
-        byGamesPlayed,
-        byFormLast5,
-        byConsistency,
-        byCaptainWinRate,
-        byCaptainGames,
-        byClutchWins,
-        byBlowoutWins,
-        byBlowoutLosses,
-        byWorstGD,
+        byWinRate, byAvgGD, byGamesPlayed, byFormLast5, byConsistency,
+        byCaptainWinRate, byCaptainGames, byClutchWins, byBlowoutWins, byBlowoutLosses, byWorstGD,
     } as const;
 }

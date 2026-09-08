@@ -3,22 +3,17 @@ import { deleteGame } from "@/app/lib/actions";
 import { Game } from "@/app/lib/definitions";
 import { auth } from "@/auth";
 
-export async function DeleteGame({ game }: { game: Game }) {
-  const session = await auth();
+export async function DeleteGame({ game, leagueSlug }: { game: Game; leagueSlug: string }) {
+    const session = await auth();
+    if (!session?.user) return null;
 
-  // If user is not logged in, don't render the delete button
-  if (!session?.user) {
-    return null;
-  }
-
-  const deleteGameWithId = deleteGame.bind(null, game);
-
-  return (
-    <form action={deleteGameWithId}>
-      <button type="submit" className="rounded-md border p-2 hover:bg-gray-400">
-        <span className="sr-only">Delete</span>
-        <TrashIcon className="w-4" />
-      </button>
-    </form>
-  );
+    const deleteGameWithId = deleteGame.bind(null, leagueSlug, game);
+    return (
+        <form action={deleteGameWithId}>
+            <button type="submit" className="rounded-md border p-2 hover:bg-gray-400">
+                <span className="sr-only">Delete</span>
+                <TrashIcon className="w-4" />
+            </button>
+        </form>
+    );
 }

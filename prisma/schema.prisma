@@ -8,6 +8,15 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model leagues {
+  id             Int      @id @default(autoincrement())
+  name           String   // "Liga do Porto", "Liga de Lisboa"
+  slug           String   @unique // "porto", "lisboa"
+  city           String
+  current_season Int      @default(3) @db.SmallInt
+  created_at     DateTime @default(now())
+}
+
 model games {
   id              Int      @id @default(autoincrement())
   date            DateTime @db.Date
@@ -20,6 +29,7 @@ model games {
   pretos_captain  String?
   numero          Int      @default(autoincrement()) @db.SmallInt
   season          Int      @default(1) @db.SmallInt
+  league_id       Int      @default(1) @db.SmallInt
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -33,6 +43,7 @@ model players {
   draws      Int?   @default(0) @db.SmallInt
   goals_diff Int?   @default(0) @db.SmallInt
   season     Int    @default(1) @db.SmallInt
+  league_id  Int    @default(1) @db.SmallInt
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -44,16 +55,32 @@ model users {
 }
 
 model tournament_mocamfe {
-  id          Int      @id @default(autoincrement())
-  season      Int      @default(2) @db.SmallInt
-  round       Int      // 1 = primeira ronda, 2 = quartos, 3 = semi, 4 = final
-  position    Int      // posição na árvore nesta ronda
-  player_id   BigInt   // id do jogador nesta posição
-  opponent_id BigInt?  // id do oponente (null se ainda não definido)
-  winner_id   BigInt?  // id do vencedor (null se ainda não jogado)
-  game_id     Int?     // id do jogo onde se defrontaram (null se pendente)
+  id              Int      @id @default(autoincrement())
+  season          Int      @default(2) @db.SmallInt
+  league_id       Int      @default(1) @db.SmallInt
+  round           Int      // 1 = primeira ronda, 2 = quartos, 3 = semi, 4 = final
+  position        Int      // posicao na arvore nesta ronda
+  player_id       BigInt   // id do jogador nesta posicao
+  opponent_id     BigInt?  // id do oponente (null se ainda nao definido)
+  winner_id       BigInt?  // id do vencedor (null se ainda nao jogado)
+  game_id         Int?     // id do jogo onde se defrontaram (null se pendente)
+  walkover        Boolean  @default(false)
+  walkover_reason String?
 
-  @@unique([season, round, position])
+  @@unique([season, league_id, round, position])
   @@index([player_id])
   @@index([opponent_id])
+  @@index([league_id])
+}
+
+model cup_absence_exemptions {
+  id         Int      @id @default(autoincrement())
+  match_id   Int      // refs tournament_mocamfe.id
+  player_id  BigInt
+  reason     String?
+  granted_by BigInt   // admin user id
+  created_at DateTime @default(now())
+
+  @@index([match_id])
+  @@index([player_id])
 }
