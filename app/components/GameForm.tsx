@@ -18,6 +18,8 @@ type Props = {
     formAction: (formData: FormData) => Promise<void>;
     onCreatePlayer?: (name: string) => Promise<{ id: string; name: string }>;
     tournamentMatches?: TournamentMatchOption[];
+    leagueSlug?: string;
+    leagueId?: number;
     initialData?: {
         date: string;
         brancosCaptain: string | null;
@@ -43,7 +45,7 @@ const ROUND_LABELS: Record<number, string> = {
 };
 const roundLabel = (round: number) => ROUND_LABELS[round] ?? `Ronda ${round}`;
 
-export default function GameForm({ players, formAction, onCreatePlayer, tournamentMatches, initialData }: Readonly<Props>) {
+export default function GameForm({ players, formAction, onCreatePlayer, tournamentMatches, leagueSlug, leagueId, initialData }: Readonly<Props>) {
     const isEdit = !!initialData;
 
     const [extraPlayers, setExtraPlayers] = useState<SimplePlayer[]>([]);
@@ -160,6 +162,8 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
             fd.set('tournament-match-id', tournamentMatchId);
         }
 
+        fd.set('league_id', String(leagueId ?? 1));
+
         startTransition(() => {
             formAction(fd);
         });
@@ -174,7 +178,7 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
         <div className="flex flex-col items-center gap-4 w-full max-w-2xl mx-auto px-4 pb-8">
             {/* Header */}
             <div className="flex flex-row items-center gap-2">
-                <Link href="/dashboard/games" className="bg-slate-400 text-white rounded-md px-2 py-1 sm:hidden">
+                <Link href={leagueSlug ? `/dashboard/${leagueSlug}/games` : '/dashboard/games'} className="bg-slate-400 text-white rounded-md px-2 py-1 sm:hidden">
                     <ArrowLeft className="w-4 h-4" />
                 </Link>
                 <h1>{isEdit ? `Editar jogo número: ${initialData.numero}` : 'Novo jogo'}</h1>

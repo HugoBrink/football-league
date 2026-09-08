@@ -7,7 +7,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getWinningAndLosingTeams } from "../helpers/functions";
 import prisma from "./client";
-import { CURRENT_SEASON } from "./data";
 import { Game } from "./definitions";
 import { updateMatchFromGame } from "./tournament";
 
@@ -21,7 +20,7 @@ const gameSchema = z.object({
     pretos_captain: z.string(),
     pretos_players: z.array(z.string()),
     numero: z.number().optional(),
-    tournament_match_id: z.number().optional() // Optional tournament match ID
+    tournament_match_id: z.number().optional(),
 });
 
 const CreateGame = gameSchema.omit({ numero: true });
@@ -32,9 +31,7 @@ async function batchUpdatePlayers(
 ) {
     const playerIdsBigInt = playerIds.map(id => BigInt(id));
     return prisma.players.updateMany({
-        where: {
-            id: { in: playerIdsBigInt }
-        },
+        where: { id: { in: playerIdsBigInt } },
         data: {
             games: { increment: games },
             wins: { increment: wins },
@@ -46,28 +43,47 @@ async function batchUpdatePlayers(
     });
 }
 
-export async function createPlayer(formData: FormData) {
+export async function createPlayer(leagueSlug: string, formData: FormData) {
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
     const name = formData.get('name') as string;
-
-    await prisma.players.create({ data: { name, season: CURRENT_SEASON } });
-
-    redirect('/dashboard/players/create');
+    await prisma.players.create({ data: { name, season: league.current_season, league_id: league.id } });
+    redirect(`/dashboard/${leagueSlug}/players/create`);
 }
 
-export async function createPlayerInline(name: string): Promise<{ id: string; name: string }> {
-    const player = await prisma.players.create({ data: { name, season: CURRENT_SEASON } });
-    revalidatePath('/dashboard');
+export async function createPlayerInline(leagueSlug: string, name: string): Promise<{ id: string; name: string }> {
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
+    const player = await prisma.players.create({ data: { name, season: league.current_season, league_id: league.id } });
+    revalidatePath(`/dashboard/${leagueSlug}`);
     return { id: String(player.id), name: player.name };
 }
 
+export async function importPlayerFromOtherLeague(leagueSlug: string, playerName: string) {
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
 
-export async function deletePlayer(id: string) {
-    return await prisma.players.delete({
-        where: { id: BigInt(id) }
+    const existing = await prisma.players.findFirst({
+        where: { name: playerName, season: league.current_season, league_id: league.id }
     });
+    if (existing) throw new Error('Player already exists in this league');
+
+    await prisma.players.create({
+        data: { name: playerName, season: league.current_season, league_id: league.id, points: 0, games: 0, wins: 0, losses: 0, draws: 0, goals_diff: 0 }
+    });
+
+    revalidatePath(`/dashboard/${leagueSlug}`);
+    revalidatePath(`/dashboard/${leagueSlug}/players/create`);
 }
 
-export async function createGame(formData: FormData): Promise<void> {
+export async function deletePlayer(id: string) {
+    return prisma.players.delete({ where: { id: BigInt(id) } });
+}
+
+export async function createGame(leagueSlug: string, formData: FormData): Promise<void> {
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
+
     const rawFormData = {
         date: formData.get('date'),
         brancos_score: formData.get('brancos-score'),
@@ -88,67 +104,42 @@ export async function createGame(formData: FormData): Promise<void> {
     }
 
     const { goal_difference } = parsedFormData.data;
-
     const { winningTeam, losingTeam, isDraw } = getWinningAndLosingTeams(parsedFormData.data as Game);
-
     const absGoalDifference = Math.abs(goal_difference);
 
     if (isDraw) {
-        // In case of draw, both teams get 2 points and draws increment
         await Promise.all([
-            batchUpdatePlayers(winningTeam, {
-                draws: 1,
-                points: 2,
-                goalsDiff: 0
-            }),
-            batchUpdatePlayers(losingTeam, {
-                draws: 1,
-                points: 2,
-                goalsDiff: 0
-            })
+            batchUpdatePlayers(winningTeam, { draws: 1, points: 2, goalsDiff: 0 }),
+            batchUpdatePlayers(losingTeam, { draws: 1, points: 2, goalsDiff: 0 })
         ]);
     } else {
         await Promise.all([
-            batchUpdatePlayers(winningTeam, {
-                wins: 1,
-                points: 3,
-                goalsDiff: absGoalDifference
-            }),
-            batchUpdatePlayers(losingTeam, {
-                losses: 1,
-                points: 1,
-                goalsDiff: -absGoalDifference
-            })
+            batchUpdatePlayers(winningTeam, { wins: 1, points: 3, goalsDiff: absGoalDifference }),
+            batchUpdatePlayers(losingTeam, { losses: 1, points: 1, goalsDiff: -absGoalDifference })
         ]);
     }
 
     const game = await prisma.games.create({
-        data: { ...parsedFormData.data, season: CURRENT_SEASON }
+        data: { ...parsedFormData.data, season: league.current_season, league_id: league.id }
     });
 
-    // Always try to update tournament matches, even if not explicitly linked
     if (game.id) {
-        await updateMatchFromGame(game.id);
+        await updateMatchFromGame(game.id, league.current_season, league.id);
     }
 
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/tournament');
-    redirect('/dashboard/games');
+    revalidatePath(`/dashboard/${leagueSlug}`);
+    revalidatePath(`/dashboard/${leagueSlug}/tournament`);
+    redirect(`/dashboard/${leagueSlug}/games`);
 }
 
-
-export async function deleteGame(game: Game) {
+export async function deleteGame(leagueSlug: string, game: Game) {
     const session = await auth();
-
-    if (!session?.user) {
-        throw new Error('Not authorized');
-    }
+    if (!session?.user) throw new Error('Not authorized');
 
     const { winningTeam, losingTeam, isDraw } = getWinningAndLosingTeams(game);
     const absGoalDifference = Math.abs(game.goal_difference);
 
     if (isDraw) {
-        // Reverse draw: remove 2 points and decrement draws
         await Promise.all([
             batchUpdatePlayers(winningTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 }),
             batchUpdatePlayers(losingTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 })
@@ -160,26 +151,23 @@ export async function deleteGame(game: Game) {
         ]);
     }
 
-    // Find and update any tournament matches that were using this game
     await prisma.tournament_mocamfe.updateMany({
         where: { game_id: game.id },
-        data: {
-            game_id: null,
-            winner_id: null
-        }
+        data: { game_id: null, winner_id: null }
     });
 
     await prisma.games.delete({ where: { id: game.id } });
-    revalidatePath('/dashboard/tournament');
-    redirect('/dashboard/games');
+    revalidatePath(`/dashboard/${leagueSlug}/tournament`);
+    redirect(`/dashboard/${leagueSlug}/games`);
 }
 
-export async function updateGame(game: Game, formData: FormData) {
+export async function updateGame(leagueSlug: string, game: Game, formData: FormData) {
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
 
     const { winningTeam, losingTeam, isDraw } = getWinningAndLosingTeams(game);
     const absGoalDifference = Math.abs(game.goal_difference);
 
-    // Reverse the old game stats
     if (isDraw) {
         await Promise.all([
             batchUpdatePlayers(winningTeam, { games: -1, draws: -1, points: -2, goalsDiff: 0 }),
@@ -209,10 +197,10 @@ export async function updateGame(game: Game, formData: FormData) {
         console.log(parsedFormData.error.flatten().fieldErrors);
         return;
     }
+
     const { winningTeam: winningTeamUpdated, losingTeam: losingTeamUpdated, isDraw: isDrawUpdated } = getWinningAndLosingTeams(parsedFormData.data as Game);
     const absGoalDifferenceUpdated = Math.abs(parsedFormData.data.goal_difference);
 
-    // Apply the new game stats
     if (isDrawUpdated) {
         await Promise.all([
             batchUpdatePlayers(winningTeamUpdated, { games: 1, draws: 1, points: 2, goalsDiff: 0 }),
@@ -230,14 +218,89 @@ export async function updateGame(game: Game, formData: FormData) {
         data: parsedFormData.data
     });
 
-    // Always try to update tournament matches, even if not explicitly linked
     if (updatedGame.id) {
-        await updateMatchFromGame(updatedGame.id);
+        await updateMatchFromGame(updatedGame.id, league.current_season, league.id);
     }
 
-    revalidatePath('/dashboard/games');
-    revalidatePath('/dashboard/tournament');
-    redirect('/dashboard/games');
+    revalidatePath(`/dashboard/${leagueSlug}/games`);
+    revalidatePath(`/dashboard/${leagueSlug}/tournament`);
+    redirect(`/dashboard/${leagueSlug}/games`);
+}
+
+// Season management
+export async function startNewSeason(leagueSlug: string) {
+    const session = await auth();
+    if (!session?.user) throw new Error('Not authorized');
+
+    const league = await prisma.leagues.findUnique({ where: { slug: leagueSlug } });
+    if (!league) throw new Error('League not found');
+
+    const currentPlayers = await prisma.players.findMany({
+        where: { season: league.current_season, league_id: league.id }
+    });
+
+    const newSeason = league.current_season + 1;
+
+    await prisma.players.createMany({
+        data: currentPlayers.map(p => ({
+            name: p.name,
+            season: newSeason,
+            league_id: league.id,
+            points: 0, games: 0, wins: 0, losses: 0, draws: 0, goals_diff: 0
+        }))
+    });
+
+    await prisma.leagues.update({
+        where: { slug: leagueSlug },
+        data: { current_season: newSeason }
+    });
+
+    revalidatePath(`/dashboard/${leagueSlug}`);
+    redirect(`/dashboard/${leagueSlug}`);
+}
+
+// Cup admin actions
+export async function confirmWalkover(matchId: number, eliminatedPlayerId: bigint, reason?: string) {
+    const session = await auth();
+    if (!session?.user) throw new Error('Not authorized');
+
+    const match = await prisma.tournament_mocamfe.findUnique({ where: { id: matchId } });
+    if (!match) throw new Error('Match not found');
+
+    const winnerId = match.player_id === eliminatedPlayerId ? match.opponent_id : match.player_id;
+
+    await prisma.tournament_mocamfe.update({
+        where: { id: matchId },
+        data: { winner_id: winnerId, walkover: true, walkover_reason: reason ?? 'Ausencia' }
+    });
+
+    if (winnerId) {
+        const nextRound = match.round + 1;
+        const nextPosition = Math.ceil(match.position / 2);
+        const existingNext = await prisma.tournament_mocamfe.findFirst({
+            where: { season: match.season, league_id: match.league_id, round: nextRound, position: nextPosition }
+        });
+        if (!existingNext) {
+            await prisma.tournament_mocamfe.create({
+                data: { season: match.season, league_id: match.league_id, round: nextRound, position: nextPosition, player_id: winnerId, opponent_id: null, winner_id: null, game_id: null }
+            });
+        } else if (!existingNext.opponent_id) {
+            await prisma.tournament_mocamfe.update({ where: { id: existingNext.id }, data: { opponent_id: winnerId } });
+        }
+    }
+
+    revalidatePath('/dashboard');
+}
+
+export async function grantAbsenceExemption(matchId: number, playerId: bigint, reason: string) {
+    const session = await auth();
+    if (!session?.user) throw new Error('Not authorized');
+
+    await prisma.cup_absence_exemptions.create({
+        data: { match_id: matchId, player_id: playerId, reason, granted_by: BigInt(1) }
+    });
+
+    revalidatePath('/dashboard');
 }
 
 export async function authenticate(

@@ -3,15 +3,35 @@ import { PowerIcon } from 'lucide-react'
 import { signOut } from '../../auth'
 import NavLinks from './NavLinks'
 import { auth } from '@/auth'
+import { getAllLeagues, getLeagueSeasons } from '@/app/lib/data'
 
 export default async function SideNav() {
     const session = await auth();
+    const leagues = await getAllLeagues();
+
+    // Load past seasons for each league
+    const leagueData = await Promise.all(
+        leagues.map(async (l) => {
+            const allSeasons = await getLeagueSeasons(l.id);
+            const pastSeasons = allSeasons
+                .filter(s => s < l.current_season)
+                .sort((a, b) => b - a);
+            return {
+                id: l.id,
+                slug: l.slug,
+                name: l.name,
+                city: l.city,
+                current_season: l.current_season,
+                pastSeasons,
+            };
+        })
+    );
 
     return (
         <div className="sticky top-0 bg-gray-800 text-white w-full h-screen p-4 flex flex-col justify-between">
             <div>
                 <h1 className="text-white text-2xl font-bold pb-2 cursor-default">Grupeta do Futebol</h1>
-                <NavLinks />
+                <NavLinks leagues={leagueData} />
             </div>
             {session?.user && (
                 <form
@@ -27,5 +47,5 @@ export default async function SideNav() {
                 </form>
             )}
         </div>
-    )
+    );
 }
