@@ -54,6 +54,12 @@ export async function createPlayer(formData: FormData) {
     redirect('/dashboard/players/create');
 }
 
+export async function createPlayerInline(name: string): Promise<{ id: string; name: string }> {
+    const player = await prisma.players.create({ data: { name, season: CURRENT_SEASON } });
+    revalidatePath('/dashboard');
+    return { id: String(player.id), name: player.name };
+}
+
 
 export async function deletePlayer(id: string) {
     return await prisma.players.delete({
