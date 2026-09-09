@@ -259,6 +259,37 @@ export async function startNewSeason(leagueSlug: string) {
     redirect(`/dashboard/${leagueSlug}`);
 }
 
+// Force a match result (admin picks winner manually)
+export async function forceMatchResult(matchId: number, winnerId: bigint, reason: string) {
+    const session = await auth();
+    if (!session?.user) throw new Error('Not authorized');
+
+    const match = await prisma.tournament_mocamfe.findUnique({ where: { id: matchId } });
+    if (!match) throw new Error('Match not found');
+    if (match.winner_id) throw new Error('Match already has a winner');
+
+    await prisma.tournament_mocamfe.update({
+        where: { id: matchId },
+        data: { winner_id: winnerId, walkover: true, walkover_reason: reason }
+    });
+
+    // Advance winner to next round
+    const nextRound = match.round + 1;
+    const nextPosition = Math.ceil(match.position / 2);
+    const existingNext = await prisma.tournament_mocamfe.findFirst({
+        where: { season: match.season, league_id: match.league_id, round: nextRound, position: nextPosition }
+    });
+    if (!existingNext) {
+        await prisma.tournament_mocamfe.create({
+            data: { season: match.season, league_id: match.league_id, round: nextRound, position: nextPosition, player_id: winnerId, opponent_id: null, winner_id: null, game_id: null }
+        });
+    } else if (!existingNext.opponent_id) {
+        await prisma.tournament_mocamfe.update({ where: { id: existingNext.id }, data: { opponent_id: winnerId } });
+    }
+
+    revalidatePath('/dashboard');
+}
+
 // Cup admin actions
 export async function confirmWalkover(matchId: number, eliminatedPlayerId: bigint, reason?: string) {
     const session = await auth();
