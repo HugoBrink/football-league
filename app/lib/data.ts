@@ -524,3 +524,335 @@ export async function computeSeasonStats(season: number, leagueId: number) {
         byCaptainWinRate, byCaptainGames, byClutchWins, byBlowoutWins, byBlowoutLosses, byWorstGD,
     } as const;
 }
+
+// ---------------------------------------------------------------------------
+// Elo Rating System
+// ---------------------------------------------------------------------------
+// Processes ALL games across ALL seasons for a league chronologically.
+// Each player starts at 1000. K-factor = 32.
+// Team Elo = average Elo of its members. Expected score uses logistic formula.
+// ---------------------------------------------------------------------------
+const ELO_INITIAL = 1000;
+const ELO_K = 32;
+
+function expectedScore(ratingA: number, ratingB: number): number {
+    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+export type EloEntry = {
+    id: string;
+    name: string;
+    elo: number;
+    peak: number;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    history: { gameNum: number; elo: number; date: Date }[];
+};
+
+export async function computeEloRatings(leagueId: number) {
+    const allGames = await prisma.games.findMany({
+        where: { league_id: leagueId },
+        orderBy: [{ season: 'asc' }, { date: 'asc' }, { numero: 'asc' }],
+    });
+
+    const allPlayers = await prisma.players.findMany({
+        where: { league_id: leagueId },
+        select: { id: true, name: true, season: true },
+    });
+
+    // Build a name lookup: prefer latest season entry for each unique id
+    const nameById = new Map<string, string>();
+    for (const p of allPlayers) {
+        nameById.set(String(p.id), p.name);
+    }
+    // Also map by name across seasons (player ids change per season)
+    const idsByName = new Map<string, string[]>();
+    for (const p of allPlayers) {
+        const arr = idsByName.get(p.name) ?? [];
+        arr.push(String(p.id));
+        idsByName.set(p.name, arr);
+    }
+
+    // Elo stored by canonical player name (since ids change across seasons)
+    const eloByName = new Map<string, { elo: number; peak: number; games: number; wins: number; losses: number; draws: number; history: { gameNum: number; elo: number; date: Date }[] }>();
+
+    const getElo = (name: string) => {
+        let entry = eloByName.get(name);
+        if (!entry) {
+            entry = { elo: ELO_INITIAL, peak: ELO_INITIAL, games: 0, wins: 0, losses: 0, draws: 0, history: [] };
+            eloByName.set(name, entry);
+        }
+        return entry;
+    };
+
+    const resolveName = (pid: string): string => {
+        return nameById.get(pid) ?? pid;
+    };
+
+    let gameNum = 0;
+    for (const game of allGames) {
+        gameNum++;
+        const date = game.date as unknown as Date;
+        const brancosRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
+        const pretosRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
+        const captainB = game.brancos_captain != null ? String(game.brancos_captain) : null;
+        const captainP = game.pretos_captain != null ? String(game.pretos_captain) : null;
+
+        const brancosIds = new Set(brancosRaw);
+        const pretosIds = new Set(pretosRaw);
+        if (captainB) brancosIds.add(captainB);
+        if (captainP) pretosIds.add(captainP);
+
+        const brancosNames = [...brancosIds].map(resolveName);
+        const pretosNames = [...pretosIds].map(resolveName);
+
+        if (brancosNames.length === 0 || pretosNames.length === 0) continue;
+
+        // Average team Elo
+        const avgBrancos = brancosNames.reduce((s, n) => s + getElo(n).elo, 0) / brancosNames.length;
+        const avgPretos = pretosNames.reduce((s, n) => s + getElo(n).elo, 0) / pretosNames.length;
+
+        const expectedBrancos = expectedScore(avgBrancos, avgPretos);
+        const expectedPretos = 1 - expectedBrancos;
+
+        const isDraw = game.brancos_score === game.pretos_score;
+        const brancosWon = game.brancos_score > game.pretos_score;
+
+        // Actual scores: 1 = win, 0.5 = draw, 0 = loss
+        const actualBrancos = isDraw ? 0.5 : (brancosWon ? 1 : 0);
+        const actualPretos = 1 - actualBrancos;
+
+        for (const name of brancosNames) {
+            const entry = getElo(name);
+            entry.elo += ELO_K * (actualBrancos - expectedBrancos);
+            entry.games++;
+            if (isDraw) entry.draws++;
+            else if (brancosWon) entry.wins++;
+            else entry.losses++;
+            if (entry.elo > entry.peak) entry.peak = entry.elo;
+            entry.history.push({ gameNum, elo: Math.round(entry.elo), date });
+        }
+        for (const name of pretosNames) {
+            const entry = getElo(name);
+            entry.elo += ELO_K * (actualPretos - expectedPretos);
+            entry.games++;
+            if (isDraw) entry.draws++;
+            else if (!brancosWon) entry.wins++;
+            else entry.losses++;
+            if (entry.elo > entry.peak) entry.peak = entry.elo;
+            entry.history.push({ gameNum, elo: Math.round(entry.elo), date });
+        }
+    }
+
+    const results: EloEntry[] = [];
+    for (const [name, entry] of eloByName) {
+        // Find the latest player id for this name
+        const ids = idsByName.get(name) ?? [];
+        results.push({
+            id: ids[ids.length - 1] ?? name,
+            name,
+            elo: Math.round(entry.elo),
+            peak: Math.round(entry.peak),
+            gamesPlayed: entry.games,
+            wins: entry.wins,
+            losses: entry.losses,
+            draws: entry.draws,
+            history: entry.history,
+        });
+    }
+
+    results.sort((a, b) => b.elo - a.elo);
+    return results;
+}
+
+// ---------------------------------------------------------------------------
+// Partnerships & Rivalries
+// ---------------------------------------------------------------------------
+// Computes for every pair of players who shared at least N games:
+//   - Together stats (same team): games, wins, win rate
+//   - Against stats (opposite teams): games, wins for each side
+// ---------------------------------------------------------------------------
+export type PairStats = {
+    playerA: string;
+    playerB: string;
+    togetherGames: number;
+    togetherWins: number;
+    togetherWinRate: number;
+    againstGames: number;
+    winsA: number;
+    winsB: number;
+};
+
+export type RivalryEntry = {
+    player: string;
+    opponent: string;
+    games: number;
+    wins: number;
+    winRate: number;
+};
+
+export async function computePartnershipsAndRivalries(season: number, leagueId: number) {
+    const [players, games] = await Promise.all([
+        prisma.players.findMany({ where: { season, league_id: leagueId } }),
+        prisma.games.findMany({ where: { season, league_id: leagueId }, orderBy: { date: 'asc' } }),
+    ]);
+
+    const nameById = new Map<string, string>();
+    for (const p of players) nameById.set(String(p.id), p.name);
+
+    const resolveName = (pid: string) => nameById.get(pid) ?? pid;
+
+    // Track pair stats keyed by "nameA|nameB" where nameA < nameB alphabetically
+    const pairKey = (a: string, b: string) => a < b ? `${a}|${b}` : `${b}|${a}`;
+    const pairs = new Map<string, { a: string; b: string; togetherGames: number; togetherWins: number; againstGames: number; winsA: number; winsB: number }>();
+    // Track per-player vs opponent
+    const vsKey = (player: string, opponent: string) => `${player}|${opponent}`;
+    const vsStats = new Map<string, { games: number; wins: number }>();
+
+    for (const game of games) {
+        const brancosRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
+        const pretosRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
+        const captainB = game.brancos_captain != null ? String(game.brancos_captain) : null;
+        const captainP = game.pretos_captain != null ? String(game.pretos_captain) : null;
+
+        const brancosIds = new Set(brancosRaw);
+        const pretosIds = new Set(pretosRaw);
+        if (captainB) brancosIds.add(captainB);
+        if (captainP) pretosIds.add(captainP);
+
+        const brancosNames = [...brancosIds].map(resolveName);
+        const pretosNames = [...pretosIds].map(resolveName);
+
+        const isDraw = game.brancos_score === game.pretos_score;
+        const brancosWon = game.brancos_score > game.pretos_score;
+
+        // Same-team pairs (Brancos)
+        for (let i = 0; i < brancosNames.length; i++) {
+            for (let j = i + 1; j < brancosNames.length; j++) {
+                const key = pairKey(brancosNames[i], brancosNames[j]);
+                let pair = pairs.get(key);
+                if (!pair) {
+                    const [a, b] = brancosNames[i] < brancosNames[j] ? [brancosNames[i], brancosNames[j]] : [brancosNames[j], brancosNames[i]];
+                    pair = { a, b, togetherGames: 0, togetherWins: 0, againstGames: 0, winsA: 0, winsB: 0 };
+                    pairs.set(key, pair);
+                }
+                pair.togetherGames++;
+                if (brancosWon) pair.togetherWins++;
+            }
+        }
+        // Same-team pairs (Pretos)
+        for (let i = 0; i < pretosNames.length; i++) {
+            for (let j = i + 1; j < pretosNames.length; j++) {
+                const key = pairKey(pretosNames[i], pretosNames[j]);
+                let pair = pairs.get(key);
+                if (!pair) {
+                    const [a, b] = pretosNames[i] < pretosNames[j] ? [pretosNames[i], pretosNames[j]] : [pretosNames[j], pretosNames[i]];
+                    pair = { a, b, togetherGames: 0, togetherWins: 0, againstGames: 0, winsA: 0, winsB: 0 };
+                    pairs.set(key, pair);
+                }
+                pair.togetherGames++;
+                if (!brancosWon && !isDraw) pair.togetherWins++;
+            }
+        }
+
+        // Opposite-team pairs (Brancos vs Pretos)
+        for (const bName of brancosNames) {
+            for (const pName of pretosNames) {
+                const key = pairKey(bName, pName);
+                let pair = pairs.get(key);
+                if (!pair) {
+                    const [a, b] = bName < pName ? [bName, pName] : [pName, bName];
+                    pair = { a, b, togetherGames: 0, togetherWins: 0, againstGames: 0, winsA: 0, winsB: 0 };
+                    pairs.set(key, pair);
+                }
+                pair.againstGames++;
+                if (!isDraw) {
+                    // 'a' is alphabetically first
+                    if (brancosWon) {
+                        if (bName < pName) pair.winsA++; else pair.winsB++;
+                    } else {
+                        if (pName < bName) pair.winsA++; else pair.winsB++;
+                    }
+                }
+
+                // Per-player vs opponent tracking
+                const vsKeyBP = vsKey(bName, pName);
+                const vsBP = vsStats.get(vsKeyBP) ?? { games: 0, wins: 0 };
+                vsBP.games++;
+                if (brancosWon) vsBP.wins++;
+                vsStats.set(vsKeyBP, vsBP);
+
+                const vsKeyPB = vsKey(pName, bName);
+                const vsPB = vsStats.get(vsKeyPB) ?? { games: 0, wins: 0 };
+                vsPB.games++;
+                if (!brancosWon && !isDraw) vsPB.wins++;
+                vsStats.set(vsKeyPB, vsPB);
+            }
+        }
+    }
+
+    const MIN_TOGETHER = 3;
+    const MIN_AGAINST = 3;
+
+    // Best & worst partnerships (together)
+    const allPairs = [...pairs.values()];
+    const togetherPairs: PairStats[] = allPairs
+        .filter(p => p.togetherGames >= MIN_TOGETHER)
+        .map(p => ({
+            playerA: p.a,
+            playerB: p.b,
+            togetherGames: p.togetherGames,
+            togetherWins: p.togetherWins,
+            togetherWinRate: p.togetherWins / p.togetherGames,
+            againstGames: p.againstGames,
+            winsA: p.winsA,
+            winsB: p.winsB,
+        }));
+
+    const bestPartnerships = [...togetherPairs].sort((a, b) => b.togetherWinRate - a.togetherWinRate || b.togetherWins - a.togetherWins);
+    const worstPartnerships = [...togetherPairs].sort((a, b) => a.togetherWinRate - b.togetherWinRate || a.togetherWins - b.togetherWins);
+
+    // Rivalries: per player, who they beat most / lose to most
+    const playerNames = [...nameById.values()];
+    const favoriteRivals: RivalryEntry[] = [];
+    const nemeses: RivalryEntry[] = [];
+
+    for (const player of playerNames) {
+        let bestWinRate = -1;
+        let bestRival: RivalryEntry | null = null;
+        let worstWinRate = 2;
+        let worstNemesis: RivalryEntry | null = null;
+
+        for (const opponent of playerNames) {
+            if (player === opponent) continue;
+            const key = vsKey(player, opponent);
+            const vs = vsStats.get(key);
+            if (!vs || vs.games < MIN_AGAINST) continue;
+
+            const wr = vs.wins / vs.games;
+            if (wr > bestWinRate || (wr === bestWinRate && vs.games > (bestRival?.games ?? 0))) {
+                bestWinRate = wr;
+                bestRival = { player, opponent, games: vs.games, wins: vs.wins, winRate: wr };
+            }
+            if (wr < worstWinRate || (wr === worstWinRate && vs.games > (worstNemesis?.games ?? 0))) {
+                worstWinRate = wr;
+                worstNemesis = { player, opponent, games: vs.games, wins: vs.wins, winRate: wr };
+            }
+        }
+
+        if (bestRival) favoriteRivals.push(bestRival);
+        if (worstNemesis) nemeses.push(worstNemesis);
+    }
+
+    favoriteRivals.sort((a, b) => b.winRate - a.winRate || b.games - a.games);
+    nemeses.sort((a, b) => a.winRate - b.winRate || b.games - a.games);
+
+    return {
+        bestPartnerships: bestPartnerships.slice(0, 10),
+        worstPartnerships: worstPartnerships.slice(0, 10),
+        favoriteRivals: favoriteRivals.slice(0, 10),
+        nemeses: nemeses.slice(0, 10),
+    };
+}
