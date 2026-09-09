@@ -1,8 +1,9 @@
 'use client';
 
-import { Star, X, Minus, Plus, ArrowLeft, Search, UserPlus } from 'lucide-react';
+import { Star, X, Minus, Plus, ArrowLeft, Search, UserPlus, ClipboardPaste } from 'lucide-react';
 import Link from 'next/link';
 import { useRef, useState, useTransition } from 'react';
+import PasteTeams from './PasteTeams';
 
 type SimplePlayer = { id: string; name: string };
 
@@ -79,9 +80,19 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
 
     const [errors, setErrors] = useState<string[]>([]);
     const [isPending, startTransition] = useTransition();
+    const [pasteMode, setPasteMode] = useState(false);
 
     const assigned = new Set([...brancos, ...pretos]);
     const available = allPlayers.filter(p => !assigned.has(String(p.id)));
+
+    function handlePasteConfirm(bIds: string[], pIds: string[], bCaptain: string, pCaptain: string) {
+        setBrancos(bIds);
+        setPretos(pIds);
+        setBrancosCaptain(bCaptain);
+        setPretosCaptain(pCaptain);
+        setPasteMode(false);
+        setErrors([]);
+    }
 
     async function handleCreatePlayer(name: string, side: TeamSide) {
         if (!onCreatePlayer) return;
@@ -217,6 +228,26 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
                     className="w-full"
                 />
             </div>
+
+            {/* Paste mode */}
+            {!isEdit && !pasteMode && (
+                <button
+                    type="button"
+                    onClick={() => setPasteMode(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-md border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-colors text-sm font-medium"
+                >
+                    <ClipboardPaste className="w-4 h-4" />
+                    Colar Equipas (texto)
+                </button>
+            )}
+
+            {pasteMode && (
+                <PasteTeams
+                    players={allPlayers}
+                    onConfirm={handlePasteConfirm}
+                    onCancel={() => setPasteMode(false)}
+                />
+            )}
 
             {/* Teams side by side, each with its own search */}
             <div className="grid grid-cols-2 gap-3 w-full">
