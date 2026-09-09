@@ -18,7 +18,7 @@ export default function TournamentBracket({ matches, players, onCreateBracket }:
     const [view, setView] = useState<'bracket' | 'list'>('bracket');
 
     const getPlayerName = (id: bigint | null) => {
-        if (!id) return '?';
+        if (!id) return 'TBD';
         return players.find(p => p.id === String(id))?.name ?? '?';
     };
 
@@ -59,16 +59,23 @@ export default function TournamentBracket({ matches, players, onCreateBracket }:
         );
     }
 
-    const totalRounds = Math.max(...matches.map(m => m.round));
+    // Calculate totalRounds from round-1 match count (not from max round in DB)
+    const r1Matches = matches.filter(m => m.round === 1);
+    const playerCount = r1Matches.length * 2;
+    const totalRounds = Math.max(Math.ceil(Math.log2(playerCount)), Math.max(...matches.map(m => m.round)));
+
+    // Organize matches by round
     const roundMatches: (TournamentMatch | null)[][] = Array.from({ length: totalRounds }, () => []);
     for (const m of matches) {
         while (roundMatches[m.round - 1].length < m.position) roundMatches[m.round - 1].push(null);
         roundMatches[m.round - 1][m.position - 1] = m;
     }
 
-    // Fill empty slots for round 1 based on expected count
-    const r1Expected = Math.pow(2, totalRounds - 1);
-    while (roundMatches[0].length < r1Expected) roundMatches[0].push(null);
+    // Fill empty slots per round based on expected count
+    for (let r = 0; r < totalRounds; r++) {
+        const expectedCount = Math.pow(2, totalRounds - 1 - r);
+        while (roundMatches[r].length < expectedCount) roundMatches[r].push(null);
+    }
 
     return (
         <div className="space-y-4">
@@ -100,7 +107,7 @@ export default function TournamentBracket({ matches, players, onCreateBracket }:
     );
 }
 
-/* ─────────────── Bracket View (visual com linhas) ─────────────── */
+/* ─────────────── Bracket View ─────────────── */
 
 type ViewProps = {
     rounds: (TournamentMatch | null)[][];
@@ -108,32 +115,41 @@ type ViewProps = {
     getPlayerName: (id: bigint | null) => string;
 };
 
+const MATCH_HEIGHT = 64;
+const MATCH_GAP_BASE = 12;
+
 function BracketView({ rounds, totalRounds, getPlayerName }: ViewProps) {
     return (
         <div className="overflow-x-auto pb-4">
-            <div className="flex gap-0 min-w-fit">
-                {rounds.map((roundMatches, roundIdx) => {
+            <div className="flex items-start min-w-fit">
+                {rounds.map((roundMatchList, roundIdx) => {
                     const roundNumber = roundIdx + 1;
                     const isLast = roundNumber === totalRounds;
-                    // Each subsequent round has more vertical spacing
-                    const matchSpacing = roundIdx === 0 ? 8 : 8 * Math.pow(2, roundIdx);
+
+                    // Spacing grows exponentially so matches align vertically across rounds
+                    const gap = MATCH_GAP_BASE * Math.pow(2, roundIdx);
+                    // Top padding to center each round relative to round 1
+                    const topPad = roundIdx === 0 ? 0 : (MATCH_HEIGHT + MATCH_GAP_BASE) * (Math.pow(2, roundIdx) - 1) / 2;
 
                     return (
-                        <div key={roundIdx} className="flex flex-col">
-                            <h3 className="font-semibold text-center text-sm text-gray-700 mb-4 px-4 whitespace-nowrap">
+                        <div key={roundIdx} className="flex flex-col shrink-0">
+                            <h3 className="font-semibold text-center text-sm text-gray-600 mb-3 px-2 whitespace-nowrap">
                                 {getRoundName(roundNumber, totalRounds)}
                             </h3>
-                            <div className="flex flex-col justify-around flex-1" style={{ gap: `${matchSpacing}px` }}>
-                                {roundMatches.map((match, idx) => (
+                            <div className="flex flex-col" style={{ gap: `${gap}px`, paddingTop: `${topPad}px` }}>
+                                {roundMatchList.map((match, idx) => (
                                     <div key={idx} className="flex items-center">
+                                        {/* Incoming connector (from previous round) */}
+                                        {roundIdx > 0 && <InConnector />}
+
                                         <MatchCard
                                             match={match}
                                             getPlayerName={getPlayerName}
-                                            isLast={isLast}
+                                            isFinal={isLast}
                                         />
-                                        {!isLast && (
-                                            <ConnectorLines position={idx} />
-                                        )}
+
+                                        {/* Outgoing connector (to next round) */}
+                                        {!isLast && <OutConnector position={idx} gap={gap} />}
                                     </div>
                                 ))}
                             </div>
@@ -145,111 +161,109 @@ function BracketView({ rounds, totalRounds, getPlayerName }: ViewProps) {
     );
 }
 
-function MatchCard({ match, getPlayerName, isLast }: {
+function InConnector() {
+    return (
+        <div className="w-5 flex items-center">
+            <div className="w-full border-t-2 border-gray-300" />
+        </div>
+    );
+}
+
+function OutConnector({ position, gap }: { position: number; gap: number }) {
+    const isTop = position % 2 === 0;
+    const verticalHeight = (MATCH_HEIGHT + gap) / 2;
+
+    return (
+        <div className="relative w-5" style={{ height: `${MATCH_HEIGHT}px` }}>
+            {/* Horizontal line out */}
+            <div className="absolute left-0 top-1/2 w-2.5 border-t-2 border-gray-300" />
+            {/* Vertical line */}
+            {isTop && (
+                <div
+                    className="absolute border-r-2 border-gray-300"
+                    style={{ right: 0, top: '50%', height: `${verticalHeight}px` }}
+                />
+            )}
+            {!isTop && (
+                <div
+                    className="absolute border-r-2 border-gray-300"
+                    style={{ right: 0, bottom: '50%', height: `${verticalHeight}px` }}
+                />
+            )}
+            {/* Horizontal line to next round */}
+            <div
+                className="absolute border-t-2 border-gray-300"
+                style={{
+                    right: 0,
+                    top: isTop ? `calc(50% + ${verticalHeight}px)` : `calc(50% - ${verticalHeight}px)`,
+                    width: '10px',
+                }}
+            />
+        </div>
+    );
+}
+
+function MatchCard({ match, getPlayerName, isFinal }: {
     match: TournamentMatch | null;
     getPlayerName: (id: bigint | null) => string;
-    isLast: boolean;
+    isFinal: boolean;
 }) {
     if (!match) {
         return (
-            <div className="w-48 border-2 border-dashed border-gray-200 rounded-lg p-2 bg-gray-50 mx-2">
-                <div className="text-xs text-gray-400 text-center py-3">A aguardar</div>
+            <div className="w-44 border-2 border-dashed border-gray-200 rounded-md bg-gray-50/50" style={{ height: `${MATCH_HEIGHT}px` }}>
+                <div className="flex items-center justify-center h-full text-xs text-gray-400">A aguardar</div>
             </div>
         );
     }
 
     const winner = match.winner_id;
-    const isFinal = isLast;
 
     return (
-        <div className={`w-48 rounded-lg overflow-hidden mx-2 shadow-sm border ${isFinal ? 'border-yellow-300 ring-2 ring-yellow-100' : 'border-gray-200'}`}>
-            {/* Match header */}
-            <div className={`px-2 py-1 text-xs ${isFinal ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-50 text-gray-500'}`}>
-                {match.walkover ? 'W.O.' : match.game_id ? `Jogo #${match.game_id}` : 'Aguardando Jogo'}
-                {isFinal && winner && ' 🏆'}
+        <div
+            className={`w-44 rounded-md overflow-hidden shadow-sm border flex flex-col ${isFinal ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-gray-200'}`}
+            style={{ height: `${MATCH_HEIGHT}px` }}
+        >
+            <div className={`flex items-center justify-between px-2 flex-1 ${
+                winner === match.player_id ? 'bg-green-50' : 'bg-white'
+            }`}>
+                <span className={`text-xs truncate ${
+                    winner === match.player_id ? 'font-bold text-green-800' :
+                    winner && winner !== match.player_id ? 'text-gray-400 line-through' : 'text-gray-900'
+                }`}>
+                    {getPlayerName(match.player_id)}
+                </span>
+                {winner === match.player_id && <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />}
             </div>
-
-            {/* Player 1 */}
-            <PlayerSlot
-                name={getPlayerName(match.player_id)}
-                isWinner={winner === match.player_id}
-                isLoser={!!winner && winner !== match.player_id}
-                hasOpponent={!!match.opponent_id}
-                position="top"
-            />
-
-            {/* Divider */}
             <div className="border-t border-gray-100" />
-
-            {/* Player 2 */}
-            <PlayerSlot
-                name={match.opponent_id ? getPlayerName(match.opponent_id) : 'BYE'}
-                isWinner={winner === match.opponent_id}
-                isLoser={!!winner && winner !== match.opponent_id && !!match.opponent_id}
-                hasOpponent={!!match.opponent_id}
-                position="bottom"
-            />
-        </div>
-    );
-}
-
-function PlayerSlot({ name, isWinner, isLoser, hasOpponent, position }: {
-    name: string;
-    isWinner: boolean;
-    isLoser: boolean;
-    hasOpponent: boolean;
-    position: 'top' | 'bottom';
-}) {
-    let bgClass = 'bg-white';
-    let textClass = 'text-gray-900';
-
-    if (isWinner) {
-        bgClass = 'bg-green-50';
-        textClass = 'text-green-800 font-bold';
-    } else if (isLoser) {
-        bgClass = 'bg-gray-50';
-        textClass = 'text-gray-400 line-through';
-    } else if (!hasOpponent && position === 'bottom') {
-        bgClass = 'bg-gray-50';
-        textClass = 'text-gray-300 italic';
-    }
-
-    return (
-        <div className={`flex items-center justify-between px-3 py-2 ${bgClass}`}>
-            <span className={`text-sm truncate ${textClass}`}>{name}</span>
-            {isWinner && <Trophy className="w-3.5 h-3.5 text-yellow-500 shrink-0" />}
-        </div>
-    );
-}
-
-function ConnectorLines({ position }: { position: number }) {
-    const isTop = position % 2 === 0;
-
-    return (
-        <div className="flex flex-col items-stretch w-6 self-stretch">
-            {/* Horizontal line from match to vertical */}
-            <div className="flex-1 relative">
-                <div className="absolute top-1/2 left-0 w-full border-t-2 border-gray-300" />
-                {/* Vertical connector: goes down for top match, up for bottom match */}
-                {isTop && (
-                    <div className="absolute top-1/2 right-0 bottom-0 border-r-2 border-gray-300" />
-                )}
-                {!isTop && (
-                    <div className="absolute top-0 right-0 bottom-1/2 border-r-2 border-gray-300" />
-                )}
+            <div className={`flex items-center justify-between px-2 flex-1 ${
+                winner === match.opponent_id ? 'bg-green-50' : 'bg-white'
+            }`}>
+                <span className={`text-xs truncate ${
+                    !match.opponent_id ? 'text-gray-300 italic' :
+                    winner === match.opponent_id ? 'font-bold text-green-800' :
+                    winner && winner !== match.opponent_id ? 'text-gray-400 line-through' : 'text-gray-900'
+                }`}>
+                    {match.opponent_id ? getPlayerName(match.opponent_id) : 'BYE'}
+                </span>
+                {winner === match.opponent_id && <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />}
+            </div>
+            {/* Status bar */}
+            <div className={`px-2 py-0.5 text-[10px] border-t ${isFinal ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-50 text-gray-500'}`}>
+                {match.walkover ? 'W.O.' : match.game_id ? `Jogo #${match.game_id}` : 'Aguardando'}
+                {isFinal && winner ? ' 🏆' : ''}
             </div>
         </div>
     );
 }
 
-/* ─────────────── List View (compacta) ─────────────── */
+/* ─────────────── List View ─────────────── */
 
 function ListView({ rounds, totalRounds, getPlayerName }: ViewProps) {
     return (
         <div className="space-y-6">
-            {rounds.map((roundMatches, roundIdx) => {
+            {rounds.map((roundMatchList, roundIdx) => {
                 const roundNumber = roundIdx + 1;
-                const filledMatches = roundMatches.filter(Boolean) as TournamentMatch[];
+                const filledMatches = roundMatchList.filter(Boolean) as TournamentMatch[];
                 if (filledMatches.length === 0) return null;
 
                 return (
@@ -273,7 +287,6 @@ function ListMatchCard({ match, getPlayerName }: { match: TournamentMatch; getPl
     const winner = match.winner_id;
     const p1Name = getPlayerName(match.player_id);
     const p2Name = match.opponent_id ? getPlayerName(match.opponent_id) : 'BYE';
-
     const p1Won = winner === match.player_id;
     const p2Won = winner === match.opponent_id;
 
