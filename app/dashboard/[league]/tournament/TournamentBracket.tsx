@@ -1,76 +1,51 @@
 'use client'
 
-import { TournamentMatch, calculateTotalRounds, getRoundName } from '@/app/lib/tournament'
-import { Trophy } from 'lucide-react'
-import { useState } from 'react'
+import { TournamentMatch, getRoundName } from '@/app/lib/tournament'
+import { forceMatchResult } from '@/app/lib/actions'
+import { Trophy, LayoutGrid, GitBranch, Gavel } from 'lucide-react'
+import { useState, useTransition } from 'react'
+
+type SimplePlayer = { id: string; name: string };
 
 type Props = {
     matches: TournamentMatch[]
-    players: { id: string; name: string }[]
+    players: SimplePlayer[]
     onCreateBracket: (playerIds: string[]) => Promise<void>
+    isAdmin?: boolean
 }
 
-export default function TournamentBracket({ matches, players, onCreateBracket }: Props) {
-    const [isCreating, setIsCreating] = useState(false)
-    const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set())
+export default function TournamentBracket({ matches, players, onCreateBracket, isAdmin }: Props) {
+    const [isCreating, setIsCreating] = useState(false);
+    const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
+    const [view, setView] = useState<'bracket' | 'list'>('bracket');
 
-    const roundMatches = matches.reduce((acc, match) => {
-        while (acc.length < match.round) {
-            acc.push([]);
-        }
-        acc[match.round - 1][match.position - 1] = match;
-        return acc;
-    }, [] as TournamentMatch[][]);
-
-    const totalRounds = matches.length > 0
-        ? Math.max(...matches.map(m => m.round))
-        : calculateTotalRounds(selectedPlayers.size);
+    const getPlayerName = (id: bigint | null) => {
+        if (!id) return 'TBD';
+        return players.find(p => p.id === String(id))?.name ?? '?';
+    };
 
     const togglePlayer = (id: string) => {
-        const newSelected = new Set(selectedPlayers);
-        if (newSelected.has(id)) {
-            newSelected.delete(id);
-        } else {
-            newSelected.add(id);
-        }
-        setSelectedPlayers(newSelected);
+        const s = new Set(selectedPlayers);
+        if (s.has(id)) s.delete(id); else s.add(id);
+        setSelectedPlayers(s);
     };
 
     const handleCreateBracket = async () => {
-        if (selectedPlayers.size < 4) {
-            alert('Selecione pelo menos 4 jogadores');
-            return;
-        }
+        if (selectedPlayers.size < 4) { alert('Seleciona pelo menos 4 jogadores'); return; }
         setIsCreating(true);
-        try {
-            await onCreateBracket(Array.from(selectedPlayers));
-        } finally {
-            setIsCreating(false);
-        }
-    };
-
-    const getPlayerName = (id: bigint | null) => {
-        if (!id) return '?';
-        const idStr = String(id);
-        const player = players.find(p => p.id === idStr);
-        return player?.name ?? '?';
+        try { await onCreateBracket(Array.from(selectedPlayers)); } finally { setIsCreating(false); }
     };
 
     if (matches.length === 0) {
         return (
             <div className="space-y-4">
-                <div className="border rounded-lg p-4">
-                    <h3 className="font-medium mb-4">Selecionar Participantes</h3>
+                <div className="border rounded-lg p-4 bg-white">
+                    <h3 className="font-medium mb-4 text-gray-900">Selecionar Participantes</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {players.map(player => (
-                            <label key={player.id} className="flex items-center space-x-2">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedPlayers.has(player.id)}
-                                    onChange={() => togglePlayer(player.id)}
-                                    className="rounded"
-                                />
-                                <span>{player.name}</span>
+                            <label key={player.id} className="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" checked={selectedPlayers.has(player.id)} onChange={() => togglePlayer(player.id)} className="rounded" />
+                                <span className="text-gray-900">{player.name}</span>
                             </label>
                         ))}
                     </div>
@@ -78,71 +53,388 @@ export default function TournamentBracket({ matches, players, onCreateBracket }:
                 <button
                     onClick={handleCreateBracket}
                     disabled={isCreating || selectedPlayers.size < 4}
-                    className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 font-medium"
                 >
-                    {isCreating ? 'Sorteando...' : 'Sortear Primeira Ronda'}
+                    {isCreating ? 'Sorteando...' : `Sortear Primeira Ronda (${selectedPlayers.size} jogadores)`}
                 </button>
             </div>
         );
     }
 
+    // Calculate totalRounds from round-1 match count (not from max round in DB)
+    const r1Matches = matches.filter(m => m.round === 1);
+    const playerCount = r1Matches.length * 2;
+    const totalRounds = Math.max(Math.ceil(Math.log2(playerCount)), Math.max(...matches.map(m => m.round)));
+
+    // Organize matches by round
+    const roundMatches: (TournamentMatch | null)[][] = Array.from({ length: totalRounds }, () => []);
+    for (const m of matches) {
+        while (roundMatches[m.round - 1].length < m.position) roundMatches[m.round - 1].push(null);
+        roundMatches[m.round - 1][m.position - 1] = m;
+    }
+
+    // Fill empty slots per round based on expected count
+    for (let r = 0; r < totalRounds; r++) {
+        const expectedCount = Math.pow(2, totalRounds - 1 - r);
+        while (roundMatches[r].length < expectedCount) roundMatches[r].push(null);
+    }
+
     return (
-        <div className={`grid gap-8`} style={{ gridTemplateColumns: `repeat(${totalRounds}, 1fr)` }}>
-            {Array.from({ length: totalRounds }, (_, round) => {
-                const roundNumber = round + 1;
-                const roundMatchList = roundMatches[round] ?? [];
-                const isLastRound = roundNumber === totalRounds;
+        <div className="space-y-4">
+            {/* View toggle */}
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+                <button
+                    onClick={() => setView('bracket')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                        ${view === 'bracket' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                    <GitBranch className="w-4 h-4" />
+                    Bracket
+                </button>
+                <button
+                    onClick={() => setView('list')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                        ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                >
+                    <LayoutGrid className="w-4 h-4" />
+                    Lista
+                </button>
+            </div>
+
+            {view === 'bracket'
+                ? <BracketView rounds={roundMatches} totalRounds={totalRounds} getPlayerName={getPlayerName} isAdmin={isAdmin} />
+                : <ListView rounds={roundMatches} totalRounds={totalRounds} getPlayerName={getPlayerName} isAdmin={isAdmin} />
+            }
+        </div>
+    );
+}
+
+/* ─────────────── Bracket View ─────────────── */
+
+type ViewProps = {
+    rounds: (TournamentMatch | null)[][];
+    totalRounds: number;
+    getPlayerName: (id: bigint | null) => string;
+    isAdmin?: boolean;
+};
+
+const MATCH_H = 76;
+const GAP_R0 = 12;
+
+function BracketView({ rounds, totalRounds, getPlayerName, isAdmin }: ViewProps) {
+    const slot = (r: number) => (MATCH_H + GAP_R0) * Math.pow(2, r);
+
+    return (
+        <div className="overflow-x-auto pb-4">
+            <div className="flex items-start min-w-fit">
+                {rounds.map((roundMatchList, roundIdx) => {
+                    const roundNumber = roundIdx + 1;
+                    const isLast = roundNumber === totalRounds;
+                    const s = slot(roundIdx);
+                    const topPad = (s - MATCH_H) / 2;
+                    const gap = s - MATCH_H;
+
+                    return (
+                        <div key={roundIdx} className="flex flex-col shrink-0">
+                            <h3 className="font-semibold text-center text-sm text-gray-600 mb-3 px-2 whitespace-nowrap">
+                                {getRoundName(roundNumber, totalRounds)}
+                            </h3>
+                            <div className="flex flex-col" style={{ gap: `${gap}px`, paddingTop: `${topPad}px` }}>
+                                {roundMatchList.map((match, idx) => (
+                                    <div key={idx} className="flex items-center" style={{ height: `${MATCH_H}px` }}>
+                                        {roundIdx > 0 && <Connector type="in" />}
+
+                                        <MatchCard
+                                            match={match}
+                                            getPlayerName={getPlayerName}
+                                            isFinal={isLast}
+                                            isAdmin={isAdmin}
+                                        />
+
+                                        {!isLast && <Connector type="out" position={idx} slotHeight={s} />}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function Connector({ type, position, slotHeight }: { type: 'in' | 'out'; position?: number; slotHeight?: number }) {
+    if (type === 'in') {
+        return (
+            <div className="w-6 flex items-center shrink-0">
+                <div className="w-full border-t-2 border-gray-300" />
+            </div>
+        );
+    }
+
+    const isTop = (position ?? 0) % 2 === 0;
+    const halfSlot = (slotHeight ?? MATCH_H) / 2;
+
+    return (
+        <div className="relative w-6 shrink-0" style={{ height: `${MATCH_H}px` }}>
+            {/* Horizontal from card */}
+            <div className="absolute left-0 top-1/2 border-t-2 border-gray-300" style={{ width: '12px' }} />
+            {/* Vertical to merge point */}
+            <div
+                className="absolute border-r-2 border-gray-300"
+                style={{
+                    left: '12px',
+                    ...(isTop
+                        ? { top: '50%', height: `${halfSlot}px` }
+                        : { bottom: '50%', height: `${halfSlot}px` }
+                    ),
+                }}
+            />
+            {/* Horizontal out to next round */}
+            <div
+                className="absolute border-t-2 border-gray-300"
+                style={{
+                    left: '12px',
+                    width: '12px',
+                    top: isTop ? `calc(50% + ${halfSlot}px)` : `calc(50% - ${halfSlot}px)`,
+                }}
+            />
+        </div>
+    );
+}
+
+function MatchCard({ match, getPlayerName, isFinal, isAdmin }: {
+    match: TournamentMatch | null;
+    getPlayerName: (id: bigint | null) => string;
+    isFinal: boolean;
+    isAdmin?: boolean;
+}) {
+    const [showActions, setShowActions] = useState(false);
+    const [isPending, startTransition] = useTransition();
+    const [reason, setReason] = useState('');
+
+    if (!match) {
+        return (
+            <div className="w-44 border-2 border-dashed border-gray-200 rounded-md bg-gray-50/50" style={{ height: `${MATCH_H}px` }}>
+                <div className="flex items-center justify-center h-full text-xs text-gray-400">A aguardar</div>
+            </div>
+        );
+    }
+
+    const winner = match.winner_id;
+    const canForce = isAdmin && !winner && match.opponent_id;
+    const p1Name = getPlayerName(match.player_id);
+    const p2Name = match.opponent_id ? getPlayerName(match.opponent_id) : 'BYE';
+
+    const handleForce = (winnerId: bigint) => {
+        const loserName = winnerId === match.player_id ? p2Name : p1Name;
+        const winnerName = winnerId === match.player_id ? p1Name : p2Name;
+        if (!confirm(`Forcar ${winnerName} como vencedor?\n${loserName} sera eliminado.\n\nRazao: ${reason || 'Sem razao'}`)) return;
+        startTransition(async () => {
+            await forceMatchResult(match.id, winnerId, reason || 'Decisao admin');
+            setShowActions(false);
+            setReason('');
+        });
+    };
+
+    return (
+        <div className="relative">
+            <div
+            className={`w-44 rounded-md overflow-hidden shadow-sm border flex flex-col ${isFinal ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-gray-200'}`}
+            style={{ height: `${MATCH_H}px` }}
+                onClick={() => canForce && setShowActions(!showActions)}
+            >
+                <div className={`flex items-center justify-between px-2 flex-1 ${
+                    winner === match.player_id ? 'bg-green-50' : 'bg-white'
+                }`}>
+                    <span className={`text-xs truncate ${
+                        winner === match.player_id ? 'font-bold text-green-800' :
+                        winner && winner !== match.player_id ? 'text-gray-400 line-through' : 'text-gray-900'
+                    }`}>
+                        {p1Name}
+                    </span>
+                    {winner === match.player_id && <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />}
+                </div>
+                <div className="border-t border-gray-100" />
+                <div className={`flex items-center justify-between px-2 flex-1 ${
+                    winner === match.opponent_id ? 'bg-green-50' : 'bg-white'
+                }`}>
+                    <span className={`text-xs truncate ${
+                        !match.opponent_id ? 'text-gray-300 italic' :
+                        winner === match.opponent_id ? 'font-bold text-green-800' :
+                        winner && winner !== match.opponent_id ? 'text-gray-400 line-through' : 'text-gray-900'
+                    }`}>
+                        {p2Name}
+                    </span>
+                    {winner === match.opponent_id && <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />}
+                </div>
+                {/* Status bar */}
+                <div className={`px-2 py-0.5 text-[10px] border-t flex justify-between items-center ${isFinal ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-50 text-gray-500'}`}>
+                    <span>
+                        {match.walkover ? `W.O.${match.walkover_reason ? ` (${match.walkover_reason})` : ''}` : match.game_id ? `Jogo #${match.game_id}` : 'Aguardando'}
+                        {isFinal && winner ? ' 🏆' : ''}
+                    </span>
+                    {canForce && <Gavel className="w-3 h-3 text-gray-400" />}
+                </div>
+            </div>
+
+            {/* Admin force panel */}
+            {showActions && canForce && (
+                <div className="absolute z-30 top-full left-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                        <Gavel className="w-3 h-3" /> Forcar Resultado
+                    </p>
+                    <input
+                        type="text"
+                        placeholder="Razao (opcional)"
+                        value={reason}
+                        onChange={e => setReason(e.target.value)}
+                        className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 text-gray-900"
+                        onClick={e => e.stopPropagation()}
+                    />
+                    <div className="flex flex-col gap-1.5">
+                        <button
+                            onClick={e => { e.stopPropagation(); handleForce(match.player_id); }}
+                            disabled={isPending}
+                            className="w-full text-left px-2 py-1.5 text-xs rounded bg-green-50 hover:bg-green-100 text-green-800 font-medium disabled:opacity-50 transition-colors"
+                        >
+                            ✓ {p1Name} avanca
+                        </button>
+                        {match.opponent_id && (
+                            <button
+                                onClick={e => { e.stopPropagation(); handleForce(match.opponent_id!); }}
+                                disabled={isPending}
+                                className="w-full text-left px-2 py-1.5 text-xs rounded bg-green-50 hover:bg-green-100 text-green-800 font-medium disabled:opacity-50 transition-colors"
+                            >
+                                ✓ {p2Name} avanca
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        onClick={e => { e.stopPropagation(); setShowActions(false); }}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700 py-1"
+                    >
+                        Cancelar
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* ─────────────── List View ─────────────── */
+
+function ListView({ rounds, totalRounds, getPlayerName, isAdmin }: ViewProps) {
+    return (
+        <div className="space-y-6">
+            {rounds.map((roundMatchList, roundIdx) => {
+                const roundNumber = roundIdx + 1;
+                const filledMatches = roundMatchList.filter(Boolean) as TournamentMatch[];
+                if (filledMatches.length === 0) return null;
 
                 return (
-                    <div key={round} className="space-y-4">
-                        <h3 className="font-medium text-center text-lg mb-6">
+                    <div key={roundIdx}>
+                        <h3 className="font-semibold text-gray-900 mb-3 text-lg">
                             {getRoundName(roundNumber, totalRounds)}
                         </h3>
-                        <div className="space-y-8 relative">
-                            {!isLastRound && roundMatchList.length > 0 && (
-                                <div className="absolute right-0 top-0 bottom-0 w-8 border-r border-gray-300" style={{
-                                    transform: 'translateX(100%)'
-                                }} />
-                            )}
-                            {roundMatchList.map((match, idx) => match ? (
-                                <div key={match.id} className="relative">
-                                    {!isLastRound && (
-                                        <div className="absolute right-0 top-1/2 w-8 border-t border-gray-300" style={{
-                                            transform: 'translateX(100%)'
-                                        }} />
-                                    )}
-                                    <div className="border rounded-lg shadow-sm bg-white overflow-hidden">
-                                        <div className="p-3 border-b bg-gray-50">
-                                            <div className="text-sm text-gray-500">
-                                                {match.walkover ? 'W.O.' : match.game_id ? `Jogo #${match.game_id}` : 'Aguardando Jogo'}
-                                            </div>
-                                        </div>
-                                        <div className="p-3 space-y-2">
-                                            <div className={`flex items-center justify-between ${match.winner_id === match.player_id ? 'text-green-600 font-bold' : ''}`}>
-                                                <span>{getPlayerName(match.player_id)}</span>
-                                                {match.winner_id === match.player_id && (
-                                                    <Trophy className="w-4 h-4" />
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-center text-gray-500">vs</div>
-                                            <div className={`flex items-center justify-between ${match.winner_id === match.opponent_id ? 'text-green-600 font-bold' : ''}`}>
-                                                <span>{getPlayerName(match.opponent_id)}</span>
-                                                {match.winner_id === match.opponent_id && (
-                                                    <Trophy className="w-4 h-4" />
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div key={`empty-${round}-${idx}`} className="border rounded-lg p-4 bg-gray-50 text-center">
-                                    <div className="text-sm text-gray-500">Aguardando Vencedor</div>
-                                </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {filledMatches.map(match => (
+                                <ListMatchCard key={match.id} match={match} getPlayerName={getPlayerName} isAdmin={isAdmin} />
                             ))}
                         </div>
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+function ListMatchCard({ match, getPlayerName, isAdmin }: { match: TournamentMatch; getPlayerName: (id: bigint | null) => string; isAdmin?: boolean }) {
+    const [showActions, setShowActions] = useState(false);
+    const [isPending, startTransition] = useTransition();
+    const [reason, setReason] = useState('');
+
+    const winner = match.winner_id;
+    const p1Name = getPlayerName(match.player_id);
+    const p2Name = match.opponent_id ? getPlayerName(match.opponent_id) : 'BYE';
+    const p1Won = winner === match.player_id;
+    const p2Won = winner === match.opponent_id;
+    const canForce = isAdmin && !winner && match.opponent_id;
+
+    const handleForce = (winnerId: bigint) => {
+        const winnerName = winnerId === match.player_id ? p1Name : p2Name;
+        const loserName = winnerId === match.player_id ? p2Name : p1Name;
+        if (!confirm(`Forcar ${winnerName} como vencedor?\n${loserName} sera eliminado.\n\nRazao: ${reason || 'Sem razao'}`)) return;
+        startTransition(async () => {
+            await forceMatchResult(match.id, winnerId, reason || 'Decisao admin');
+            setShowActions(false);
+            setReason('');
+        });
+    };
+
+    return (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+            <div className="px-3 py-1.5 bg-gray-50 border-b text-xs text-gray-500 flex justify-between items-center">
+                <span>
+                    {match.walkover ? `W.O.${match.walkover_reason ? ` — ${match.walkover_reason}` : ''}` : match.game_id ? `Jogo #${match.game_id}` : 'Aguardando Jogo'}
+                </span>
+                <div className="flex items-center gap-2">
+                    {(p1Won || p2Won) && <span className="text-green-600 font-medium">Concluido</span>}
+                    {canForce && (
+                        <button onClick={() => setShowActions(!showActions)} className="text-gray-400 hover:text-gray-600 transition-colors" title="Forcar resultado">
+                            <Gavel className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            </div>
+            <div className="divide-y">
+                <div className={`flex items-center justify-between px-3 py-2.5 ${p1Won ? 'bg-green-50' : ''}`}>
+                    <span className={`text-sm ${p1Won ? 'font-bold text-green-800' : p2Won ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                        {p1Name}
+                    </span>
+                    {p1Won && <Trophy className="w-4 h-4 text-yellow-500" />}
+                </div>
+                <div className={`flex items-center justify-between px-3 py-2.5 ${p2Won ? 'bg-green-50' : ''}`}>
+                    <span className={`text-sm ${p2Won ? 'font-bold text-green-800' : p1Won ? 'text-gray-400 line-through' : match.opponent_id ? 'text-gray-900' : 'text-gray-300 italic'}`}>
+                        {p2Name}
+                    </span>
+                    {p2Won && <Trophy className="w-4 h-4 text-yellow-500" />}
+                </div>
+            </div>
+
+            {/* Force result panel */}
+            {showActions && canForce && (
+                <div className="border-t p-3 bg-amber-50 space-y-2">
+                    <p className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                        <Gavel className="w-3 h-3" /> Forcar Resultado
+                    </p>
+                    <input
+                        type="text"
+                        placeholder="Razao: desistencia, lesao, etc."
+                        value={reason}
+                        onChange={e => setReason(e.target.value)}
+                        className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 text-gray-900"
+                    />
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => handleForce(match.player_id)}
+                            disabled={isPending}
+                            className="flex-1 px-2 py-1.5 text-xs rounded bg-green-100 hover:bg-green-200 text-green-800 font-medium disabled:opacity-50 transition-colors"
+                        >
+                            ✓ {p1Name}
+                        </button>
+                        {match.opponent_id && (
+                            <button
+                                onClick={() => handleForce(match.opponent_id!)}
+                                disabled={isPending}
+                                className="flex-1 px-2 py-1.5 text-xs rounded bg-green-100 hover:bg-green-200 text-green-800 font-medium disabled:opacity-50 transition-colors"
+                            >
+                                ✓ {p2Name}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

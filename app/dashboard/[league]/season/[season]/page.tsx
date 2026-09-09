@@ -22,7 +22,7 @@ export default async function SeasonOverview({ params }: { params: Promise<{ sea
                     </Link>
                 </div>
             </div>
-            <Table players={players} />
+            <Table players={players} leagueSlug={leagueSlug} />
         </div>
     );
 }

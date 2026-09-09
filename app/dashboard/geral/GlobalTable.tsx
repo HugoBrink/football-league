@@ -1,4 +1,5 @@
 import { AggregatedPlayer } from "@/app/lib/definitions";
+import PlayerLink from "@/app/components/PlayerLink";
 
 const LEAGUE_COLORS: Record<string, string> = {
     porto: 'bg-blue-100 text-blue-800',
@@ -32,7 +33,7 @@ export default function GlobalTable({ standings }: { standings: AggregatedPlayer
                             {standings.map((player, index) => (
                                 <tr key={player.name} className="w-full border-b py-3 text-sm last-of-type:border-none [&:first-child>td:first-child]:rounded-tl-lg [&:first-child>td:last-child]:rounded-tr-lg [&:last-child>td:first-child]:rounded-bl-lg [&:last-child>td:last-child]:rounded-br-lg">
                                     <td className="whitespace-nowrap py-3 sm:pl-6 pl-2 sm:pr-3 font-bold">{index + 1}</td>
-                                    <td className="whitespace-nowrap py-3 pl-1 pr-3"><p>{player.name}</p></td>
+                                    <td className="whitespace-nowrap py-3 pl-1 pr-3"><p><PlayerLink name={player.name} /></p></td>
                                     <td className="whitespace-nowrap py-3 px-2">
                                         <div className="flex gap-1">
                                             {player.leagues.map(l => (

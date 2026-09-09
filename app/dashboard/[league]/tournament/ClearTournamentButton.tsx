@@ -1,22 +1,25 @@
 'use client'
 
+import { useTransition } from "react";
+import { Loader2 } from "lucide-react";
 import { clearTournamentAction } from "./actions";
 
 export default function ClearTournamentButton({ leagueSlug }: { leagueSlug: string }) {
-    const clearWithLeague = clearTournamentAction.bind(null, leagueSlug);
+    const [isPending, startTransition] = useTransition();
+
     return (
-        <form action={clearWithLeague}>
-            <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                onClick={(e) => {
-                    if (!confirm('Tem certeza que quer limpar o torneio? Esta acao nao pode ser desfeita.')) {
-                        e.preventDefault();
-                    }
-                }}
-            >
-                Limpar Torneio
-            </button>
-        </form>
+        <button
+            onClick={() => {
+                if (!confirm('Tem certeza que quer limpar o torneio? Esta ação não pode ser desfeita.')) return;
+                startTransition(async () => {
+                    await clearTournamentAction(leagueSlug);
+                });
+            }}
+            disabled={isPending}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-opacity flex items-center gap-2"
+        >
+            {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isPending ? 'A limpar…' : 'Limpar Torneio'}
+        </button>
     );
 }

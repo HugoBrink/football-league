@@ -35,7 +35,7 @@ export default async function SeasonGames({ params }: { params: Promise<{ season
                                 <p className="whitespace-nowrap">{playerMap.get(BigInt(game.brancos_captain ?? '0')) ?? '-'}</p> vs
                                 <p>{playerMap.get(BigInt(game.pretos_captain ?? '0')) ?? '-'}</p>
                             </div>
-                            <p>{game.brancos_score} - {game.pretos_score}</p>
+                            <p>{game.brancos_score != null ? `${game.brancos_score} - ${game.pretos_score}` : '⏳ Sem resultado'}</p>
                         </div>
                     </Link>
                 ))}

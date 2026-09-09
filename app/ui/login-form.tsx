@@ -55,7 +55,7 @@ export default function LoginForm() {
                         </div>
                     </div>
                 </div>
-                <button className="mt-4 w-full" aria-disabled={isPending}>
+                <button className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50" aria-disabled={isPending}>
                     Log in
                 </button>
                 <div

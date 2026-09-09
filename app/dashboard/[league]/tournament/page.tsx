@@ -45,6 +45,7 @@ export default async function TournamentPage({ params }: { params: Promise<{ lea
                 matches={matches}
                 players={players.map((p: Player) => ({ id: String(p.id), name: p.name }))}
                 onCreateBracket={createBracketWithLeague}
+                isAdmin={!!session?.user}
             />
         </div>
     );

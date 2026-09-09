@@ -5,12 +5,14 @@ export function getWinningAndLosingTeams(game: Game) {
     let losingTeam: string[];
     let isDraw: boolean = false;
 
-    if (game.brancos_score === game.pretos_score) {
-        // It's a draw, both teams are considered the same
+    const bScore = game.brancos_score ?? 0;
+    const pScore = game.pretos_score ?? 0;
+
+    if (bScore === pScore) {
         isDraw = true;
         winningTeam = [...game.brancos_players, game.brancos_captain];
         losingTeam = [...game.pretos_players, game.pretos_captain];
-    } else if (game.brancos_score > game.pretos_score) {
+    } else if (bScore > pScore) {
         winningTeam = [...game.brancos_players, game.brancos_captain];
         losingTeam = [...game.pretos_players, game.pretos_captain];
     } else {

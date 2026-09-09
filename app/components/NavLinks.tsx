@@ -1,6 +1,6 @@
 'use client'
 
-import { Archive, Globe, Home, List, Swords, Trophy, User, ChevronDown } from 'lucide-react'
+import { Archive, Globe, Home, List, Swords, Trophy, User, ChevronDown, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
@@ -32,6 +32,7 @@ export default function NavLinks({ leagues }: NavLinksProps) {
         { name: 'Taca', href: `/dashboard/${currentLeague.slug}/tournament`, icon: Trophy },
         { name: 'Estatisticas', href: `/players?league=${currentLeague.slug}`, icon: User },
         { name: 'Duelos', href: `/players/duels?league=${currentLeague.slug}`, icon: Swords },
+        { name: 'Elo Rating', href: `/players/elo?league=${currentLeague.slug}`, icon: TrendingUp },
     ] : [];
 
     // Auto-open seasons if we're on a season archive page
