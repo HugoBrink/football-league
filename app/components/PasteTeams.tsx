@@ -147,10 +147,43 @@ export default function PasteTeams({ players, onConfirm, onCancel }: Props) {
     };
 
     const changeMatch = (side: 'brancos' | 'pretos', index: number, newPlayer: SimplePlayer | null) => {
+        if (!newPlayer) {
+            const setter = side === 'brancos' ? setBrancosMatches : setPretosMatches;
+            setter(prev => prev.map((m, i) => i === index ? { ...m, match: null, score: 0 } : m));
+            return;
+        }
+
+        const oldPlayer = (side === 'brancos' ? brancosMatches : pretosMatches)[index]?.match;
+
+        // Find who currently holds newPlayer (could be in either side)
+        let conflictSide: 'brancos' | 'pretos' | null = null;
+        let conflictIndex = -1;
+
+        const bIdx = brancosMatches.findIndex(m => m.match?.id === newPlayer.id);
+        if (bIdx !== -1 && !(side === 'brancos' && bIdx === index)) {
+            conflictSide = 'brancos';
+            conflictIndex = bIdx;
+        }
+        const pIdx = pretosMatches.findIndex(m => m.match?.id === newPlayer.id);
+        if (pIdx !== -1 && !(side === 'pretos' && pIdx === index)) {
+            conflictSide = 'pretos';
+            conflictIndex = pIdx;
+        }
+
+        // Perform swap: give the conflicting row our old player
+        if (conflictSide) {
+            const conflictSetter = conflictSide === 'brancos' ? setBrancosMatches : setPretosMatches;
+            conflictSetter(prev => prev.map((m, i) => {
+                if (i !== conflictIndex) return m;
+                return { ...m, match: oldPlayer ?? null, score: oldPlayer ? 0.5 : 0 };
+            }));
+        }
+
+        // Set our row to the new player
         const setter = side === 'brancos' ? setBrancosMatches : setPretosMatches;
         setter(prev => prev.map((m, i) => {
             if (i !== index) return m;
-            return { ...m, match: newPlayer, score: newPlayer ? 1.0 : 0 };
+            return { ...m, match: newPlayer, score: 1.0 };
         }));
     };
 
@@ -308,12 +341,17 @@ function MatchRow({ matched, allPlayers, usedIds, onChange, isCaptain, variant }
     const borderColor = isGood ? 'border-green-300' : isWeak ? 'border-amber-300' : 'border-red-300';
     const iconColor = isGood ? 'text-green-500' : isWeak ? 'text-amber-500' : 'text-red-500';
 
-    const available = allPlayers.filter(p =>
-        !usedIds.has(p.id) || p.id === matched.match?.id
-    );
+    // Show ALL players, not just unused — sorted: unused first, then used
+    const allSorted = [...allPlayers].sort((a, b) => {
+        const aUsed = usedIds.has(a.id) && a.id !== matched.match?.id;
+        const bUsed = usedIds.has(b.id) && b.id !== matched.match?.id;
+        if (aUsed !== bUsed) return aUsed ? 1 : -1;
+        return a.name.localeCompare(b.name);
+    });
+
     const filtered = search
-        ? available.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-        : available;
+        ? allSorted.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
+        : allSorted;
 
     return (
         <div className="relative">
@@ -338,31 +376,43 @@ function MatchRow({ matched, allPlayers, usedIds, onChange, isCaptain, variant }
             </div>
 
             {showDropdown && (
-                <div className={`absolute z-20 w-full mt-1 rounded-md border border-gray-300 shadow-lg ${isLight ? 'bg-white' : 'bg-gray-700'} max-h-40 overflow-y-auto`}>
+                <div className={`absolute z-20 w-full mt-1 rounded-md border border-gray-300 shadow-lg ${isLight ? 'bg-white' : 'bg-gray-700'} max-h-48 overflow-y-auto`}>
                     <input
                         type="text"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Procurar..."
-                        className={`w-full px-2 py-1.5 text-sm border-b border-gray-200 ${isLight ? 'bg-white text-gray-900' : 'bg-gray-700 text-gray-100'}`}
+                        className={`w-full px-2 py-1.5 text-sm border-b border-gray-200 sticky top-0 ${isLight ? 'bg-white text-gray-900' : 'bg-gray-700 text-gray-100'}`}
                         autoFocus
-                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                        onBlur={() => setTimeout(() => setShowDropdown(false), 250)}
                     />
-                    {filtered.map(p => (
-                        <button
-                            key={p.id}
-                            type="button"
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={() => {
-                                onChange(p);
-                                setShowDropdown(false);
-                                setSearch('');
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-sm ${isLight ? 'text-gray-900 hover:bg-gray-100' : 'text-gray-100 hover:bg-gray-600'} transition-colors`}
-                        >
-                            {p.name}
-                        </button>
-                    ))}
+                    {filtered.map(p => {
+                        const isCurrentMatch = p.id === matched.match?.id;
+                        const isUsedElsewhere = usedIds.has(p.id) && !isCurrentMatch;
+                        return (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => {
+                                    onChange(p);
+                                    setShowDropdown(false);
+                                    setSearch('');
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-sm flex items-center justify-between
+                                    ${isCurrentMatch
+                                        ? (isLight ? 'bg-blue-50 text-blue-700 font-medium' : 'bg-blue-900 text-blue-200 font-medium')
+                                        : isUsedElsewhere
+                                            ? (isLight ? 'text-gray-400 hover:bg-gray-50' : 'text-gray-500 hover:bg-gray-600')
+                                            : (isLight ? 'text-gray-900 hover:bg-gray-100' : 'text-gray-100 hover:bg-gray-600')
+                                    } transition-colors`}
+                            >
+                                <span>{p.name}</span>
+                                {isCurrentMatch && <Check className="w-3 h-3" />}
+                                {isUsedElsewhere && <span className="text-xs opacity-60">🔄 trocar</span>}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
         </div>
