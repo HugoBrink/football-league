@@ -20,14 +20,14 @@ model leagues {
 model games {
   id              Int      @id @default(autoincrement())
   date            DateTime @db.Date
-  brancos_score   Int
-  pretos_score    Int
-  goal_difference Int
+  brancos_score   Int?
+  pretos_score    Int?
+  goal_difference Int?
   brancos_players Json     @db.Json
   pretos_players  Json     @db.Json
   brancos_captain String?
   pretos_captain  String?
-  numero          Int      @default(autoincrement()) @db.SmallInt
+  numero          Int      @unique @default(autoincrement()) @db.SmallInt
   season          Int      @default(1) @db.SmallInt
   league_id       Int      @default(1) @db.SmallInt
 }
@@ -83,4 +83,30 @@ model cup_absence_exemptions {
 
   @@index([match_id])
   @@index([player_id])
+}
+
+model game_votes {
+  id          Int      @id @default(autoincrement())
+  game_id     Int
+  voter_name  String   // who voted (for dedup, not shown in results)
+  best_player String   // "Melhor em Campo"
+  disruptor   String   // "Maior Desequilibrador"
+  wall        String   // "Maior Muralha"
+  best_goal   String?  // "Melhor Golo" (optional)
+  has_paid    Boolean  @default(false) // paid 5.90€
+  created_at  DateTime @default(now())
+
+  @@unique([game_id, voter_name])
+  @@index([game_id])
+}
+
+model voting_sessions {
+  id         Int       @id @default(autoincrement())
+  game_id    Int       @unique
+  league_id  Int
+  is_open    Boolean   @default(true)
+  created_at DateTime  @default(now())
+  closed_at  DateTime?
+
+  @@index([league_id])
 }

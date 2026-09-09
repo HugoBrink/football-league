@@ -31,6 +31,7 @@ type Props = {
         pretosScore: number;
         tournamentMatchId?: number;
         numero?: number;
+        noResult?: boolean;
     };
 };
 
@@ -69,6 +70,7 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
 
     const [brancosScore, setBrancosScore] = useState(initialData?.brancosScore ?? 0);
     const [pretosScore, setPretosScore] = useState(initialData?.pretosScore ?? 0);
+    const [noResult, setNoResult] = useState(initialData?.noResult ?? false);
 
     const [date, setDate] = useState(
         initialData?.date ?? new Date().toISOString().split('T')[0]
@@ -154,8 +156,14 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
 
         const fd = new FormData();
         fd.set('date', date);
-        fd.set('brancos-score', String(brancosScore));
-        fd.set('pretos-score', String(pretosScore));
+        if (noResult) {
+            fd.set('no-result', '1');
+            fd.set('brancos-score', '0');
+            fd.set('pretos-score', '0');
+        } else {
+            fd.set('brancos-score', String(brancosScore));
+            fd.set('pretos-score', String(pretosScore));
+        }
         fd.set('captain-brancos', brancosCaptain!);
         fd.set('captain-pretos', pretosCaptain!);
 
@@ -249,6 +257,26 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
                 />
             )}
 
+            {/* Swap teams button */}
+            {(brancos.length > 0 || pretos.length > 0) && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        const oldBrancos = brancos;
+                        const oldPretos = pretos;
+                        const oldBCaptain = brancosCaptain;
+                        const oldPCaptain = pretosCaptain;
+                        setBrancos(oldPretos);
+                        setPretos(oldBrancos);
+                        setBrancosCaptain(oldPCaptain);
+                        setPretosCaptain(oldBCaptain);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors text-sm font-medium"
+                >
+                    ⇄ Trocar Equipas
+                </button>
+            )}
+
             {/* Teams side by side, each with its own search */}
             <div className="grid grid-cols-2 gap-3 w-full">
                 <TeamZone
@@ -282,11 +310,28 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
             {/* Scoreboard */}
             <div className="w-full">
                 <h2 className="text-center font-bold text-lg mb-3">Resultado</h2>
-                <div className="flex items-center justify-center gap-6">
-                    <ScoreInput label="Brancos" value={brancosScore} onChange={setBrancosScore} variant="light" />
-                    <span className="text-2xl font-bold text-gray-400">-</span>
-                    <ScoreInput label="Pretos" value={pretosScore} onChange={setPretosScore} variant="dark" />
+                <div className="flex items-center justify-center gap-2 mb-3">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={noResult}
+                            onChange={e => setNoResult(e.target.checked)}
+                            className="rounded"
+                        />
+                        <span className="text-gray-600">Sem resultado (pré-jogo)</span>
+                    </label>
                 </div>
+                {noResult ? (
+                    <div className="text-center py-4 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-sm">
+                        O resultado será adicionado mais tarde
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-center gap-6">
+                        <ScoreInput label="Brancos" value={brancosScore} onChange={setBrancosScore} variant="light" />
+                        <span className="text-2xl font-bold text-gray-400">-</span>
+                        <ScoreInput label="Pretos" value={pretosScore} onChange={setPretosScore} variant="dark" />
+                    </div>
+                )}
             </div>
 
             {/* Errors */}

@@ -170,21 +170,31 @@ export default function PasteTeams({ players, onConfirm, onCancel }: Props) {
             conflictIndex = pIdx;
         }
 
-        // Perform swap: give the conflicting row our old player
-        if (conflictSide) {
-            const conflictSetter = conflictSide === 'brancos' ? setBrancosMatches : setPretosMatches;
-            conflictSetter(prev => prev.map((m, i) => {
-                if (i !== conflictIndex) return m;
+        // Build new state for both sides in one go
+        const newBrancos = brancosMatches.map((m, i) => {
+            // This is the row we're assigning the new player to
+            if (side === 'brancos' && i === index) {
+                return { ...m, match: newPlayer, score: 1.0 };
+            }
+            // This is the conflict row that gets the old player (swap)
+            if (conflictSide === 'brancos' && i === conflictIndex) {
                 return { ...m, match: oldPlayer ?? null, score: oldPlayer ? 0.5 : 0 };
-            }));
-        }
+            }
+            return m;
+        });
 
-        // Set our row to the new player
-        const setter = side === 'brancos' ? setBrancosMatches : setPretosMatches;
-        setter(prev => prev.map((m, i) => {
-            if (i !== index) return m;
-            return { ...m, match: newPlayer, score: 1.0 };
-        }));
+        const newPretos = pretosMatches.map((m, i) => {
+            if (side === 'pretos' && i === index) {
+                return { ...m, match: newPlayer, score: 1.0 };
+            }
+            if (conflictSide === 'pretos' && i === conflictIndex) {
+                return { ...m, match: oldPlayer ?? null, score: oldPlayer ? 0.5 : 0 };
+            }
+            return m;
+        });
+
+        setBrancosMatches(newBrancos);
+        setPretosMatches(newPretos);
     };
 
     const handleConfirm = () => {
@@ -253,6 +263,19 @@ export default function PasteTeams({ players, onConfirm, onCancel }: Props) {
                     Alguns nomes nao foram reconhecidos. Corrige manualmente.
                 </div>
             )}
+
+            <button
+                type="button"
+                onClick={() => {
+                    const oldB = brancosMatches;
+                    const oldP = pretosMatches;
+                    setBrancosMatches(oldP);
+                    setPretosMatches(oldB);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-1.5 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors text-sm font-medium"
+            >
+                ⇄ Trocar Equipas
+            </button>
 
             <div className="grid grid-cols-2 gap-3">
                 <MatchReviewColumn

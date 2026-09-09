@@ -51,10 +51,11 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
                 brancosPlayers: brancosPlayersList,
                 pretosCaptain: game.pretos_captain ? String(game.pretos_captain) : null,
                 pretosPlayers: pretosPlayersList,
-                brancosScore: game.brancos_score,
-                pretosScore: game.pretos_score,
+                brancosScore: game.brancos_score ?? 0,
+                pretosScore: game.pretos_score ?? 0,
                 tournamentMatchId: tournamentMatch?.id,
                 numero: game.numero,
+                noResult: game.brancos_score == null,
             }}
         />
     );

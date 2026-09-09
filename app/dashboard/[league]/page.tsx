@@ -34,7 +34,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ le
                     )}
                 </div>
             </div>
-            <Table players={players} />
+            <Table players={players} leagueSlug={leagueSlug} />
         </div>
     );
 }

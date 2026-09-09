@@ -72,6 +72,36 @@ export async function getPlayerById(id: string) {
     return prisma.players.findUnique({ where: { id: BigInt(id) } });
 }
 
+export async function fetchPlayerAllSeasons(name: string, leagueId: number) {
+    return prisma.players.findMany({
+        where: { name, league_id: leagueId },
+        orderBy: { season: 'asc' },
+    });
+}
+
+export async function fetchPlayerMVPStats(playerName: string, leagueId: number) {
+    const votes = await prisma.game_votes.findMany({
+        where: {
+            game_id: {
+                in: (await prisma.games.findMany({
+                    where: { league_id: leagueId },
+                    select: { id: true },
+                })).map(g => g.id),
+            },
+        },
+    });
+
+    let bestPlayer = 0, disruptor = 0, wall = 0, bestGoal = 0;
+    for (const v of votes) {
+        if (v.best_player === playerName) bestPlayer++;
+        if (v.disruptor === playerName) disruptor++;
+        if (v.wall === playerName) wall++;
+        if (v.best_goal === playerName) bestGoal++;
+    }
+
+    return { bestPlayer, disruptor, wall, bestGoal, totalVotes: bestPlayer + disruptor + wall + bestGoal };
+}
+
 // Game data
 export async function fetchGames(season: number, leagueId: number) {
     return prisma.games.findMany({
@@ -82,6 +112,14 @@ export async function fetchGames(season: number, leagueId: number) {
 
 export async function fetchGame(id: string) {
     const game = await prisma.games.findUnique({ where: { id: Number(id) } });
+    if (game) {
+        return { ...game, brancos_players: game.brancos_players as any, pretos_players: game.pretos_players as any };
+    }
+    return null;
+}
+
+export async function fetchGameByNumero(numero: number) {
+    const game = await prisma.games.findUnique({ where: { numero } });
     if (game) {
         return { ...game, brancos_players: game.brancos_players as any, pretos_players: game.pretos_players as any };
     }
@@ -206,8 +244,8 @@ export async function computeLongestUnbeatenStreak(season: number, leagueId: num
                 }
             }
         }
-        const brancosLost = game.brancos_score < game.pretos_score;
-        const pretosLost = game.pretos_score < game.brancos_score;
+        const brancosLost = (game.brancos_score ?? 0) < (game.pretos_score ?? 0);
+        const pretosLost = (game.pretos_score ?? 0) < (game.brancos_score ?? 0);
 
         const applyResult = (pid: string, didLose: boolean) => {
             const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
@@ -293,8 +331,8 @@ export async function computeLongestLosingStreak(season: number, leagueId: numbe
                 }
             }
         }
-        const brancosLost = game.brancos_score < game.pretos_score;
-        const pretosLost = game.pretos_score < game.brancos_score;
+        const brancosLost = (game.brancos_score ?? 0) < (game.pretos_score ?? 0);
+        const pretosLost = (game.pretos_score ?? 0) < (game.brancos_score ?? 0);
 
         const applyResult = (pid: string, didLose: boolean) => {
             const info = streaks.get(pid) ?? { current: 0, best: 0, currentStart: null, currentEnd: null, bestStart: null, bestEnd: null };
@@ -393,13 +431,17 @@ export async function computeSeasonStats(season: number, leagueId: number) {
     const captainCounts = new Map<string, number>();
 
     for (const game of games) {
+        // Skip games without a result
+        if (game.brancos_score == null || game.pretos_score == null) continue;
+
         const date = game.date as unknown as Date;
         const brancosPlayersRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
         const pretosPlayersRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
         const isDraw = game.brancos_score === game.pretos_score;
         const brancosWon = game.brancos_score > game.pretos_score;
         const pretosWon = game.pretos_score > game.brancos_score;
-        const goalDiffAbs = Math.abs(game.goal_difference);
+        const goalDiffAbs = Math.abs(game.goal_difference ?? 0);
+        const gamGD = game.goal_difference ?? 0;
         const captainBrancos = game.brancos_captain != null ? String(game.brancos_captain) : null;
         const captainPretos = game.pretos_captain != null ? String(game.pretos_captain) : null;
 
@@ -418,10 +460,10 @@ export async function computeSeasonStats(season: number, leagueId: number) {
         };
 
         for (const pid of brancosSet) {
-            push(pid, brancosWon, !brancosWon && !isDraw, isDraw, game.goal_difference, captainBrancos === pid);
+            push(pid, brancosWon, !brancosWon && !isDraw, isDraw, gamGD, captainBrancos === pid);
         }
         for (const pid of pretosSet) {
-            push(pid, pretosWon, !pretosWon && !isDraw, isDraw, -game.goal_difference, captainPretos === pid);
+            push(pid, pretosWon, !pretosWon && !isDraw, isDraw, -gamGD, captainPretos === pid);
         }
 
         if (goalDiffAbs === 1) {
@@ -529,6 +571,7 @@ export async function computeSeasonStats(season: number, leagueId: number) {
 // Elo Rating System
 // ---------------------------------------------------------------------------
 // Processes ALL games across ALL seasons for a league chronologically.
+// Cumulative — no resets between seasons.
 // Each player starts at 1000. K-factor = 32.
 // Team Elo = average Elo of its members. Expected score uses logistic formula.
 // ---------------------------------------------------------------------------
@@ -539,6 +582,8 @@ function expectedScore(ratingA: number, ratingB: number): number {
     return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
+type EloHistoryPoint = { gameNum: number; elo: number; date: Date };
+
 export type EloEntry = {
     id: string;
     name: string;
@@ -548,12 +593,33 @@ export type EloEntry = {
     wins: number;
     losses: number;
     draws: number;
-    history: { gameNum: number; elo: number; date: Date }[];
+    history: EloHistoryPoint[];
 };
 
-export async function computeEloRatings(leagueId: number) {
+// Shared helpers to extract player names from a game row
+function resolveGameTeams(
+    game: { brancos_players: any; pretos_players: any; brancos_captain: string | null; pretos_captain: string | null },
+    resolveName: (pid: string) => string,
+) {
+    const brancosRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
+    const pretosRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
+    const captainB = game.brancos_captain != null ? String(game.brancos_captain) : null;
+    const captainP = game.pretos_captain != null ? String(game.pretos_captain) : null;
+    const brancosIds = new Set(brancosRaw);
+    const pretosIds = new Set(pretosRaw);
+    if (captainB) brancosIds.add(captainB);
+    if (captainP) pretosIds.add(captainP);
+    return {
+        brancosNames: [...brancosIds].map(resolveName),
+        pretosNames: [...pretosIds].map(resolveName),
+        captainB,
+        captainP,
+    };
+}
+
+export async function computeEloRatings(leagueId: number, season?: number) {
     const allGames = await prisma.games.findMany({
-        where: { league_id: leagueId },
+        where: { league_id: leagueId, ...(season != null ? { season } : {}) },
         orderBy: [{ season: 'asc' }, { date: 'asc' }, { numero: 'asc' }],
     });
 
@@ -562,12 +628,9 @@ export async function computeEloRatings(leagueId: number) {
         select: { id: true, name: true, season: true },
     });
 
-    // Build a name lookup: prefer latest season entry for each unique id
     const nameById = new Map<string, string>();
-    for (const p of allPlayers) {
-        nameById.set(String(p.id), p.name);
-    }
-    // Also map by name across seasons (player ids change per season)
+    for (const p of allPlayers) nameById.set(String(p.id), p.name);
+
     const idsByName = new Map<string, string[]>();
     for (const p of allPlayers) {
         const arr = idsByName.get(p.name) ?? [];
@@ -575,8 +638,10 @@ export async function computeEloRatings(leagueId: number) {
         idsByName.set(p.name, arr);
     }
 
-    // Elo stored by canonical player name (since ids change across seasons)
-    const eloByName = new Map<string, { elo: number; peak: number; games: number; wins: number; losses: number; draws: number; history: { gameNum: number; elo: number; date: Date }[] }>();
+    const resolveName = (pid: string): string => nameById.get(pid) ?? pid;
+
+    type EloState = { elo: number; peak: number; games: number; wins: number; losses: number; draws: number; history: EloHistoryPoint[] };
+    const eloByName = new Map<string, EloState>();
 
     const getElo = (name: string) => {
         let entry = eloByName.get(name);
@@ -587,46 +652,31 @@ export async function computeEloRatings(leagueId: number) {
         return entry;
     };
 
-    const resolveName = (pid: string): string => {
-        return nameById.get(pid) ?? pid;
-    };
-
     let gameNum = 0;
     for (const game of allGames) {
+        // Skip games without a result
+        if (game.brancos_score == null || game.pretos_score == null) continue;
+
         gameNum++;
         const date = game.date as unknown as Date;
-        const brancosRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
-        const pretosRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
-        const captainB = game.brancos_captain != null ? String(game.brancos_captain) : null;
-        const captainP = game.pretos_captain != null ? String(game.pretos_captain) : null;
-
-        const brancosIds = new Set(brancosRaw);
-        const pretosIds = new Set(pretosRaw);
-        if (captainB) brancosIds.add(captainB);
-        if (captainP) pretosIds.add(captainP);
-
-        const brancosNames = [...brancosIds].map(resolveName);
-        const pretosNames = [...pretosIds].map(resolveName);
+        const { brancosNames, pretosNames } = resolveGameTeams(game, resolveName);
 
         if (brancosNames.length === 0 || pretosNames.length === 0) continue;
 
-        // Average team Elo
         const avgBrancos = brancosNames.reduce((s, n) => s + getElo(n).elo, 0) / brancosNames.length;
         const avgPretos = pretosNames.reduce((s, n) => s + getElo(n).elo, 0) / pretosNames.length;
 
-        const expectedBrancos = expectedScore(avgBrancos, avgPretos);
-        const expectedPretos = 1 - expectedBrancos;
+        const expB = expectedScore(avgBrancos, avgPretos);
+        const expP = 1 - expB;
 
         const isDraw = game.brancos_score === game.pretos_score;
         const brancosWon = game.brancos_score > game.pretos_score;
-
-        // Actual scores: 1 = win, 0.5 = draw, 0 = loss
-        const actualBrancos = isDraw ? 0.5 : (brancosWon ? 1 : 0);
-        const actualPretos = 1 - actualBrancos;
+        const actualB = isDraw ? 0.5 : (brancosWon ? 1 : 0);
+        const actualP = 1 - actualB;
 
         for (const name of brancosNames) {
             const entry = getElo(name);
-            entry.elo += ELO_K * (actualBrancos - expectedBrancos);
+            entry.elo += ELO_K * (actualB - expB);
             entry.games++;
             if (isDraw) entry.draws++;
             else if (brancosWon) entry.wins++;
@@ -636,7 +686,7 @@ export async function computeEloRatings(leagueId: number) {
         }
         for (const name of pretosNames) {
             const entry = getElo(name);
-            entry.elo += ELO_K * (actualPretos - expectedPretos);
+            entry.elo += ELO_K * (actualP - expP);
             entry.games++;
             if (isDraw) entry.draws++;
             else if (!brancosWon) entry.wins++;
@@ -648,10 +698,9 @@ export async function computeEloRatings(leagueId: number) {
 
     const results: EloEntry[] = [];
     for (const [name, entry] of eloByName) {
-        // Find the latest player id for this name
         const ids = idsByName.get(name) ?? [];
         results.push({
-            id: ids[ids.length - 1] ?? name,
+            id: ids.at(-1) ?? name,
             name,
             elo: Math.round(entry.elo),
             peak: Math.round(entry.peak),
@@ -665,6 +714,127 @@ export async function computeEloRatings(leagueId: number) {
 
     results.sort((a, b) => b.elo - a.elo);
     return results;
+}
+
+// ---------------------------------------------------------------------------
+// Elo snapshot for a specific game
+// ---------------------------------------------------------------------------
+// Processes all games in a league up to (and including) the target game
+// with soft resets between seasons, then returns before/after Elo and delta.
+// ---------------------------------------------------------------------------
+export type PlayerEloSnapshot = {
+    name: string;
+    eloBefore: number;
+    eloAfter: number;
+    delta: number;
+    isCaptain: boolean;
+};
+
+export type GameEloSnapshot = {
+    brancos: PlayerEloSnapshot[];
+    pretos: PlayerEloSnapshot[];
+    brancosAvgBefore: number;
+    pretosAvgBefore: number;
+    brancosAvgAfter: number;
+    pretosAvgAfter: number;
+};
+
+export async function computeEloSnapshotForGame(leagueId: number, gameId: number): Promise<GameEloSnapshot | null> {
+    const allGames = await prisma.games.findMany({
+        where: { league_id: leagueId },
+        orderBy: [{ season: 'asc' }, { date: 'asc' }, { numero: 'asc' }],
+    });
+
+    const allPlayers = await prisma.players.findMany({
+        where: { league_id: leagueId },
+        select: { id: true, name: true },
+    });
+
+    const nameById = new Map<string, string>();
+    for (const p of allPlayers) nameById.set(String(p.id), p.name);
+    const resolveName = (pid: string) => nameById.get(pid) ?? pid;
+
+    const eloByName = new Map<string, number>();
+    const getElo = (name: string) => eloByName.get(name) ?? ELO_INITIAL;
+    const setElo = (name: string, elo: number) => eloByName.set(name, elo);
+
+    let snapshot: GameEloSnapshot | null = null;
+
+    for (const game of allGames) {
+        if (game.brancos_score == null || game.pretos_score == null) continue;
+
+        const { brancosNames, pretosNames, captainB, captainP } = resolveGameTeams(game, resolveName);
+
+        if (brancosNames.length === 0 || pretosNames.length === 0) continue;
+
+        const avgBrancosBefore = brancosNames.reduce((s, n) => s + getElo(n), 0) / brancosNames.length;
+        const avgPretosBefore = pretosNames.reduce((s, n) => s + getElo(n), 0) / pretosNames.length;
+
+        const expB = expectedScore(avgBrancosBefore, avgPretosBefore);
+        const expP = 1 - expB;
+
+        const isDraw = game.brancos_score === game.pretos_score;
+        const brancosWon = game.brancos_score > game.pretos_score;
+        const actualB = isDraw ? 0.5 : (brancosWon ? 1 : 0);
+        const actualP = 1 - actualB;
+
+        const isTargetGame = game.id === gameId;
+        const brancosSnapshots: PlayerEloSnapshot[] = [];
+        const pretosSnapshots: PlayerEloSnapshot[] = [];
+
+        const rawDeltaB = ELO_K * (actualB - expB);
+        const rawDeltaP = ELO_K * (actualP - expP);
+
+        for (const name of brancosNames) {
+            const before = getElo(name);
+            const after = before + rawDeltaB;
+            setElo(name, after);
+            if (isTargetGame) {
+                const roundedBefore = Math.round(before);
+                const roundedAfter = Math.round(after);
+                brancosSnapshots.push({
+                    name,
+                    eloBefore: roundedBefore,
+                    eloAfter: roundedAfter,
+                    delta: roundedAfter - roundedBefore,
+                    isCaptain: captainB != null && resolveName(captainB) === name,
+                });
+            }
+        }
+        for (const name of pretosNames) {
+            const before = getElo(name);
+            const after = before + rawDeltaP;
+            setElo(name, after);
+            if (isTargetGame) {
+                const roundedBefore = Math.round(before);
+                const roundedAfter = Math.round(after);
+                pretosSnapshots.push({
+                    name,
+                    eloBefore: roundedBefore,
+                    eloAfter: roundedAfter,
+                    delta: roundedAfter - roundedBefore,
+                    isCaptain: captainP != null && resolveName(captainP) === name,
+                });
+            }
+        }
+
+        if (isTargetGame) {
+            const avgBrancosAfter = brancosNames.reduce((s, n) => s + getElo(n), 0) / brancosNames.length;
+            const avgPretosAfter = pretosNames.reduce((s, n) => s + getElo(n), 0) / pretosNames.length;
+
+            snapshot = {
+                brancos: brancosSnapshots,
+                pretos: pretosSnapshots,
+                brancosAvgBefore: Math.round(avgBrancosBefore),
+                pretosAvgBefore: Math.round(avgPretosBefore),
+                brancosAvgAfter: Math.round(avgBrancosAfter),
+                pretosAvgAfter: Math.round(avgPretosAfter),
+            };
+            break;
+        }
+    }
+
+    return snapshot;
 }
 
 // ---------------------------------------------------------------------------
@@ -724,6 +894,8 @@ export async function computePartnershipsAndRivalries(season: number, leagueId: 
 
         const brancosNames = [...brancosIds].map(resolveName);
         const pretosNames = [...pretosIds].map(resolveName);
+
+        if (game.brancos_score == null || game.pretos_score == null) continue;
 
         const isDraw = game.brancos_score === game.pretos_score;
         const brancosWon = game.brancos_score > game.pretos_score;
@@ -855,4 +1027,227 @@ export async function computePartnershipsAndRivalries(season: number, leagueId: 
         favoriteRivals: favoriteRivals.slice(0, 10),
         nemeses: nemeses.slice(0, 10),
     };
+}
+
+// ---------------------------------------------------------------------------
+// MVP Voting
+// ---------------------------------------------------------------------------
+
+export async function fetchVotingSession(gameId: number) {
+    return prisma.voting_sessions.findUnique({ where: { game_id: gameId } });
+}
+
+export async function hasPlayerVoted(gameId: number, voterName: string) {
+    const vote = await prisma.game_votes.findUnique({
+        where: { game_id_voter_name: { game_id: gameId, voter_name: voterName } },
+    });
+    return vote != null;
+}
+
+export type VoteResults = {
+    totalVotes: number;
+    bestPlayer: { name: string; votes: number }[];
+    disruptor: { name: string; votes: number }[];
+    wall: { name: string; votes: number }[];
+    bestGoal: { name: string; votes: number }[];
+};
+
+export async function fetchVoteResults(gameId: number): Promise<VoteResults> {
+    const votes = await prisma.game_votes.findMany({ where: { game_id: gameId } });
+
+    const countField = (field: (v: typeof votes[0]) => string | null) => {
+        const counts = new Map<string, number>();
+        for (const v of votes) {
+            const val = field(v);
+            if (val) counts.set(val, (counts.get(val) ?? 0) + 1);
+        }
+        return [...counts.entries()]
+            .map(([name, voteCount]) => ({ name, votes: voteCount }))
+            .sort((a, b) => b.votes - a.votes);
+    };
+
+    return {
+        totalVotes: votes.length,
+        bestPlayer: countField(v => v.best_player),
+        disruptor: countField(v => v.disruptor),
+        wall: countField(v => v.wall),
+        bestGoal: countField(v => v.best_goal),
+    };
+}
+
+export type CumulativeMVPStats = {
+    bestPlayer: { name: string; count: number }[];
+    disruptor: { name: string; count: number }[];
+    wall: { name: string; count: number }[];
+    bestGoal: { name: string; count: number }[];
+};
+
+export async function fetchCumulativeMVPStats(season: number, leagueId: number): Promise<CumulativeMVPStats> {
+    // Get all game IDs for this season and league
+    const games = await prisma.games.findMany({
+        where: { season, league_id: leagueId },
+        select: { id: true },
+    });
+    const gameIds = games.map(g => g.id);
+
+    // Get closed voting sessions for these games
+    const sessions = await prisma.voting_sessions.findMany({
+        where: { game_id: { in: gameIds }, is_open: false },
+        select: { game_id: true },
+    });
+    const closedGameIds = sessions.map(s => s.game_id);
+
+    if (closedGameIds.length === 0) {
+        return { bestPlayer: [], disruptor: [], wall: [], bestGoal: [] };
+    }
+
+    const allVotes = await prisma.game_votes.findMany({
+        where: { game_id: { in: closedGameIds } },
+    });
+
+    // For each category, find the winner per game, then count wins across games
+    const winnerPerGame = (field: (v: typeof allVotes[0]) => string | null) => {
+        const byGame = new Map<number, Map<string, number>>();
+        for (const v of allVotes) {
+            const val = field(v);
+            if (!val) continue;
+            let gameMap = byGame.get(v.game_id);
+            if (!gameMap) { gameMap = new Map(); byGame.set(v.game_id, gameMap); }
+            gameMap.set(val, (gameMap.get(val) ?? 0) + 1);
+        }
+        // Count how many games each player won
+        const winCounts = new Map<string, number>();
+        for (const [, gameMap] of byGame) {
+            let maxVotes = 0;
+            let winner = '';
+            for (const [name, count] of gameMap) {
+                if (count > maxVotes) { maxVotes = count; winner = name; }
+            }
+            if (winner) winCounts.set(winner, (winCounts.get(winner) ?? 0) + 1);
+        }
+        return [...winCounts.entries()]
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+    };
+
+    return {
+        bestPlayer: winnerPerGame(v => v.best_player),
+        disruptor: winnerPerGame(v => v.disruptor),
+        wall: winnerPerGame(v => v.wall),
+        bestGoal: winnerPerGame(v => v.best_goal),
+    };
+}
+
+export async function fetchGamePlayerNames(gameId: number): Promise<string[]> {
+    const game = await prisma.games.findUnique({ where: { id: gameId } });
+    if (!game) return [];
+
+    const allPlayers = await prisma.players.findMany({
+        where: { league_id: game.league_id },
+        select: { id: true, name: true },
+    });
+    const nameById = new Map<string, string>();
+    for (const p of allPlayers) nameById.set(String(p.id), p.name);
+
+    const brancosRaw: string[] = (game.brancos_players as any[])?.map(String) ?? [];
+    const pretosRaw: string[] = (game.pretos_players as any[])?.map(String) ?? [];
+    const ids = new Set([...brancosRaw]);
+    const pretosIds = new Set([...pretosRaw]);
+    if (game.brancos_captain) ids.add(String(game.brancos_captain));
+    if (game.pretos_captain) pretosIds.add(String(game.pretos_captain));
+    for (const pid of pretosIds) ids.add(pid);
+
+    return [...ids].map(pid => nameById.get(pid) ?? pid).sort();
+}
+
+export type GameTeamPlayer = { name: string; elo: number; isCaptain: boolean };
+export type GameTeamsInfo = {
+    brancos: GameTeamPlayer[];
+    pretos: GameTeamPlayer[];
+    brancosAvg: number;
+    pretosAvg: number;
+    hasResult: boolean;
+};
+
+export async function fetchGameTeamsWithElo(gameId: number): Promise<GameTeamsInfo | null> {
+    const game = await prisma.games.findUnique({ where: { id: gameId } });
+    if (!game) return null;
+
+    // Compute current Elo up to (but not including) this game
+    const precedingGames = await prisma.games.findMany({
+        where: { league_id: game.league_id },
+        orderBy: [{ season: 'asc' }, { date: 'asc' }, { numero: 'asc' }],
+    });
+
+    const allPlayers = await prisma.players.findMany({
+        where: { league_id: game.league_id },
+        select: { id: true, name: true },
+    });
+    const nameById = new Map<string, string>();
+    for (const p of allPlayers) nameById.set(String(p.id), p.name);
+    const resolveName = (pid: string) => nameById.get(pid) ?? pid;
+
+    const eloByName = new Map<string, number>();
+    const getElo = (name: string) => eloByName.get(name) ?? ELO_INITIAL;
+
+    // Process all games up to (but not including) the target game
+    for (const g of precedingGames) {
+        if (g.id === gameId) break;
+        if (g.brancos_score == null || g.pretos_score == null) continue;
+
+        const { brancosNames, pretosNames } = resolveGameTeams(g, resolveName);
+        if (brancosNames.length === 0 || pretosNames.length === 0) continue;
+
+        const avgB = brancosNames.reduce((s, n) => s + getElo(n), 0) / brancosNames.length;
+        const avgP = pretosNames.reduce((s, n) => s + getElo(n), 0) / pretosNames.length;
+        const expB = expectedScore(avgB, avgP);
+        const expP = 1 - expB;
+        const isDraw = g.brancos_score === g.pretos_score;
+        const bWon = g.brancos_score > g.pretos_score;
+        const actB = isDraw ? 0.5 : (bWon ? 1 : 0);
+        const actP = 1 - actB;
+
+        for (const n of brancosNames) eloByName.set(n, getElo(n) + ELO_K * (actB - expB));
+        for (const n of pretosNames) eloByName.set(n, getElo(n) + ELO_K * (actP - expP));
+    }
+
+    const { brancosNames, pretosNames, captainB, captainP } = resolveGameTeams(game, resolveName);
+
+    const brancosTeam: GameTeamPlayer[] = brancosNames.map(n => ({
+        name: n,
+        elo: Math.round(getElo(n)),
+        isCaptain: captainB != null && resolveName(captainB) === n,
+    }));
+    const pretosTeam: GameTeamPlayer[] = pretosNames.map(n => ({
+        name: n,
+        elo: Math.round(getElo(n)),
+        isCaptain: captainP != null && resolveName(captainP) === n,
+    }));
+
+    const brancosAvg = brancosTeam.length > 0 ? Math.round(brancosTeam.reduce((s, p) => s + p.elo, 0) / brancosTeam.length) : 0;
+    const pretosAvg = pretosTeam.length > 0 ? Math.round(pretosTeam.reduce((s, p) => s + p.elo, 0) / pretosTeam.length) : 0;
+
+    return {
+        brancos: brancosTeam,
+        pretos: pretosTeam,
+        brancosAvg,
+        pretosAvg,
+        hasResult: game.brancos_score != null && game.pretos_score != null,
+    };
+}
+
+export async function fetchVoterNames(gameId: number): Promise<string[]> {
+    const votes = await prisma.game_votes.findMany({
+        where: { game_id: gameId },
+        select: { voter_name: true },
+    });
+    return votes.map(v => v.voter_name);
+}
+
+export async function fetchPaidPlayers(gameId: number): Promise<string[]> {
+    const votes = await prisma.game_votes.findMany({
+        where: { game_id: gameId, has_paid: true },
+        select: { voter_name: true },
+    });
+    return votes.map(v => v.voter_name);
 }

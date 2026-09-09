@@ -1,4 +1,5 @@
-import { computeLongestLosingStreak, computeLongestUnbeatenStreak, computeSeasonStats, fetchTopPlayersByGoalsDiff, fetchTopPlayersByPoints, fetchTopPlayersByWins, getAllLeagues, getLeagueBySlug } from "../lib/data";
+import { computeLongestLosingStreak, computeLongestUnbeatenStreak, computeSeasonStats, fetchCumulativeMVPStats, fetchTopPlayersByGoalsDiff, fetchTopPlayersByPoints, fetchTopPlayersByWins, getAllLeagues, getLeagueBySlug } from "../lib/data";
+import PlayerLink from "../components/PlayerLink";
 import SeasonSelect from "./SeasonSelect";
 
 export const dynamic = 'force-dynamic';
@@ -19,13 +20,14 @@ export default async function Players({ searchParams }: { searchParams: Promise<
     const seasonParam = Array.isArray(sp?.season) ? sp?.season[0] : sp?.season;
     const season = seasonParam ? Number(seasonParam) : league.current_season;
 
-    const [topByPoints, topByWins, topByGoalsDiff, unbeaten, losing, seasonStats] = await Promise.all([
+    const [topByPoints, topByWins, topByGoalsDiff, unbeaten, losing, seasonStats, mvpStats] = await Promise.all([
         fetchTopPlayersByPoints(5, season, league.id),
         fetchTopPlayersByWins(5, season, league.id),
         fetchTopPlayersByGoalsDiff(5, season, league.id),
         computeLongestUnbeatenStreak(season, league.id),
         computeLongestLosingStreak(season, league.id),
-        computeSeasonStats(season, league.id)
+        computeSeasonStats(season, league.id),
+        fetchCumulativeMVPStats(season, league.id),
     ]);
 
     const bestUnbeaten = unbeaten[0];
@@ -48,7 +50,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <h3 className="font-semibold text-center">Maior Streak sem perder</h3>
                     {bestUnbeaten ? (
                         <div className="mt-2">
-                            <div className="text-lg font-semibold">{bestUnbeaten.name}</div>
+                            <div className="text-lg font-semibold"><PlayerLink name={bestUnbeaten.name} leagueSlug={league.slug} /></div>
                             <div className="text-gray-600">{bestUnbeaten.bestStreak} jogos</div>
                             {bestUnbeaten.startDate && bestUnbeaten.endDate && (
                                 <div className="text-sm text-gray-600">
@@ -63,7 +65,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <h3 className="font-semibold text-center">Maior Streak de Derrotas</h3>
                     {worstLosing ? (
                         <div className="mt-2">
-                            <div className="text-lg font-semibold">{worstLosing.name}</div>
+                            <div className="text-lg font-semibold"><PlayerLink name={worstLosing.name} leagueSlug={league.slug} /></div>
                             <div className="text-gray-600">{worstLosing.bestStreak} jogos</div>
                             {worstLosing.startDate && worstLosing.endDate && (
                                 <div className="text-sm text-gray-600">
@@ -78,7 +80,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <h3 className="font-semibold text-center">Ironman — Mais Jogos</h3>
                     {seasonStats.byGamesPlayed[0] ? (
                         <div className="mt-2">
-                            <div className="text-lg font-semibold">{seasonStats.byGamesPlayed[0].name}</div>
+                            <div className="text-lg font-semibold"><PlayerLink name={seasonStats.byGamesPlayed[0].name} leagueSlug={league.slug} /></div>
                             <div className="text-gray-600">{seasonStats.byGamesPlayed[0].games} jogos</div>
                         </div>
                     ) : <div className="mt-2 text-gray-600">Sem dados</div>}
@@ -88,7 +90,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <h3 className="font-semibold text-center">Mais vezes Capitao</h3>
                     {seasonStats.byCaptainGames[0] ? (
                         <div className="mt-2">
-                            <div className="text-lg font-semibold">{seasonStats.byCaptainGames[0].name}</div>
+                            <div className="text-lg font-semibold"><PlayerLink name={seasonStats.byCaptainGames[0].name} leagueSlug={league.slug} /></div>
                             <div className="text-gray-600">{seasonStats.byCaptainGames[0].captainGames} vezes</div>
                         </div>
                     ) : <div className="mt-2 text-gray-600">Sem dados</div>}
@@ -101,7 +103,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {topByPoints.map((p) => (
                             <li key={String(p.id)} className="flex justify-between">
-                                <span>{p.name}</span>
+                                <span><PlayerLink name={p.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{p.points ?? 0} pts</span>
                             </li>
                         ))}
@@ -113,7 +115,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {topByWins.map((p) => (
                             <li key={String(p.id)} className="flex justify-between">
-                                <span>{p.name}</span>
+                                <span><PlayerLink name={p.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{p.wins ?? 0} V</span>
                             </li>
                         ))}
@@ -125,7 +127,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {topByGoalsDiff.map((p) => (
                             <li key={String(p.id)} className="flex justify-between">
-                                <span>{p.name}</span>
+                                <span><PlayerLink name={p.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{p.goals_diff ?? 0}</span>
                             </li>
                         ))}
@@ -137,7 +139,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {seasonStats.byWorstGD.slice(0, 5).map(e => (
                             <li key={e.id} className="flex justify-between">
-                                <span>{e.name}</span>
+                                <span><PlayerLink name={e.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{e.goalsDiff}</span>
                             </li>
                         ))}
@@ -149,7 +151,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {seasonStats.byWinRate.slice(0, 5).map(e => (
                             <li key={e.id} className="flex justify-between">
-                                <span>{e.name}</span>
+                                <span><PlayerLink name={e.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{(e.winRate * 100).toFixed(0)}%</span>
                             </li>
                         ))}
@@ -161,7 +163,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {seasonStats.byCaptainGames.slice(0, 5).map(e => (
                             <li key={e.id} className="flex justify-between">
-                                <span>{e.name}</span>
+                                <span><PlayerLink name={e.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{e.captainGames}</span>
                             </li>
                         ))}
@@ -173,7 +175,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {seasonStats.byFormLast5.slice(0, 5).map(e => (
                             <li key={e.id} className="flex justify-between">
-                                <span>{e.name}</span>
+                                <span><PlayerLink name={e.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{e.last5} pts</span>
                             </li>
                         ))}
@@ -185,7 +187,7 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {seasonStats.byBlowoutWins.slice(0, 5).map(e => (
                             <li key={e.id} className="flex justify-between">
-                                <span>{e.name}</span>
+                                <span><PlayerLink name={e.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{e.blowoutWins}</span>
                             </li>
                         ))}
@@ -197,13 +199,73 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     <ol className="mt-2 list-decimal list-inside space-y-1">
                         {seasonStats.byBlowoutLosses.slice(0, 5).map(e => (
                             <li key={e.id} className="flex justify-between">
-                                <span>{e.name}</span>
+                                <span><PlayerLink name={e.name} leagueSlug={league.slug} /></span>
                                 <span className="text-gray-600">{e.blowoutLosses}</span>
                             </li>
                         ))}
                     </ol>
                 </div>
             </div>
+
+            {/* MVP Voting Stats */}
+            {(mvpStats.bestPlayer.length > 0 || mvpStats.disruptor.length > 0 || mvpStats.wall.length > 0 || mvpStats.bestGoal.length > 0) && (
+                <>
+                    <h3 className="text-lg font-semibold mt-2">Prémios MVP (votação)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div className="rounded-lg border p-4">
+                            <h3 className="font-semibold text-center">⭐ Melhor em Campo</h3>
+                            <ol className="mt-2 list-decimal list-inside space-y-1">
+                                {mvpStats.bestPlayer.slice(0, 5).map(e => (
+                                    <li key={e.name} className="flex justify-between">
+                                        <span>{e.name}</span>
+                                        <span className="text-gray-600">{e.count}x</span>
+                                    </li>
+                                ))}
+                            </ol>
+                            {mvpStats.bestPlayer.length === 0 && <p className="mt-2 text-gray-400 text-sm">Sem dados</p>}
+                        </div>
+
+                        <div className="rounded-lg border p-4">
+                            <h3 className="font-semibold text-center">⚡ Maior Desequilibrador</h3>
+                            <ol className="mt-2 list-decimal list-inside space-y-1">
+                                {mvpStats.disruptor.slice(0, 5).map(e => (
+                                    <li key={e.name} className="flex justify-between">
+                                        <span>{e.name}</span>
+                                        <span className="text-gray-600">{e.count}x</span>
+                                    </li>
+                                ))}
+                            </ol>
+                            {mvpStats.disruptor.length === 0 && <p className="mt-2 text-gray-400 text-sm">Sem dados</p>}
+                        </div>
+
+                        <div className="rounded-lg border p-4">
+                            <h3 className="font-semibold text-center">🧱 Maior Muralha</h3>
+                            <ol className="mt-2 list-decimal list-inside space-y-1">
+                                {mvpStats.wall.slice(0, 5).map(e => (
+                                    <li key={e.name} className="flex justify-between">
+                                        <span>{e.name}</span>
+                                        <span className="text-gray-600">{e.count}x</span>
+                                    </li>
+                                ))}
+                            </ol>
+                            {mvpStats.wall.length === 0 && <p className="mt-2 text-gray-400 text-sm">Sem dados</p>}
+                        </div>
+
+                        <div className="rounded-lg border p-4">
+                            <h3 className="font-semibold text-center">⚽ Melhor Golo</h3>
+                            <ol className="mt-2 list-decimal list-inside space-y-1">
+                                {mvpStats.bestGoal.slice(0, 5).map(e => (
+                                    <li key={e.name} className="flex justify-between">
+                                        <span>{e.name}</span>
+                                        <span className="text-gray-600">{e.count}x</span>
+                                    </li>
+                                ))}
+                            </ol>
+                            {mvpStats.bestGoal.length === 0 && <p className="mt-2 text-gray-400 text-sm">Sem dados</p>}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

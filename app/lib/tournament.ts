@@ -109,6 +109,8 @@ export async function updateMatchFromGame(gameId: number, season: number, league
         const opponentInBrancos = brancosPlayers.has(opponentId);
         if (playerInBrancos === opponentInBrancos) continue;
 
+        if (game.brancos_score == null || game.pretos_score == null) continue;
+
         const winnerId = game.brancos_score > game.pretos_score
             ? (playerInBrancos ? match.player_id : match.opponent_id)
             : (playerInBrancos ? match.opponent_id : match.player_id);

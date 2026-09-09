@@ -1,6 +1,7 @@
 import { Player } from "@/app/lib/definitions";
+import PlayerLink from "./PlayerLink";
 
-export default function Table({ players }: { players: Player[] }) {
+export default function Table({ players, leagueSlug }: { players: Player[]; leagueSlug?: string }) {
 
     return (
         <div className="mt-6">
@@ -71,7 +72,7 @@ export default function Table({ players }: { players: Player[] }) {
                                     </td>
                                     <td className="whitespace-nowrap py-3 pl-1 pr-3">
                                         <div className="flex items-center gap-3">
-                                            <p>{player.name}</p>
+                                            <p><PlayerLink name={player.name} leagueSlug={leagueSlug} /></p>
                                         </div>
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-3">

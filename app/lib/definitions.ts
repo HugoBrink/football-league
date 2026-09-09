@@ -14,9 +14,9 @@ export type Player = {
 export type Game = {
     id?: number
     date: Date
-    brancos_score: number
-    pretos_score: number
-    goal_difference: number
+    brancos_score: number | null
+    pretos_score: number | null
+    goal_difference: number | null
     brancos_players: any
     pretos_players: any
     brancos_captain: string

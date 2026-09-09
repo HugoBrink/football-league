@@ -1,4 +1,6 @@
-import { fetchGame, fetchPlayers, getLeagueBySlug } from "@/app/lib/data";
+import { computeEloSnapshotForGame, fetchGame, getLeagueBySlug } from "@/app/lib/data";
+import GameEloBreakdown from "@/app/components/GameEloBreakdown";
+import GameVoteResults from "@/app/components/GameVoteResults";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,14 +11,11 @@ export default async function Page({ params }: { params: Promise<{ id: string; s
     const league = await getLeagueBySlug(leagueSlug);
     if (!league) notFound();
 
-    const [game, players] = await Promise.all([
-        fetchGame(id),
-        fetchPlayers(seasonNumber, league.id)
-    ]);
-
+    const game = await fetchGame(id);
     if (!game) return <div>Game not found</div>;
 
-    const playerMap = new Map(players.map((player: any) => [BigInt(player.id), player.name]));
+    const hasResult = game.brancos_score != null && game.pretos_score != null;
+    const eloSnapshot = hasResult ? await computeEloSnapshotForGame(league.id, game.id as number) : null;
 
     return (
         <div className="w-full flex flex-col items-center gap-2">
@@ -27,28 +26,21 @@ export default async function Page({ params }: { params: Promise<{ id: string; s
                 <h1>Jogo #{game.numero}</h1>
             </div>
             <p className="text-gray-600 text-sm">Data: {new Date(game.date).toLocaleDateString('pt-PT')}</p>
-            <div className="grid grid-cols-2 gap-8 text-left">
-                <div className="flex flex-col items-center justify-center gap-2">
-                    <p className="font-bold pb-4">Brancos</p>
-                    <p className="font-semibold pb-2">{playerMap.get(BigInt(game?.brancos_captain || ''))}</p>
-                    <ul className="list-inside">
-                        {game.brancos_players?.map((player: any, index: number) => (
-                            <li key={index}>{playerMap.get(BigInt(player)) ?? String(player)}</li>
-                        ))}
-                    </ul>
+            {hasResult ? (
+                <p className="text-xl font-bold">{game.brancos_score} - {game.pretos_score}</p>
+            ) : (
+                <p className="text-sm font-medium text-amber-600">⏳ Resultado por adicionar</p>
+            )}
+
+            {eloSnapshot && (
+                <div className="w-full mt-2">
+                    <GameEloBreakdown snapshot={eloSnapshot} />
                 </div>
-                <div className="flex flex-col items-center justify-center gap-2">
-                    <p className="font-bold pb-4">Pretos</p>
-                    <p className="font-semibold pb-2">{playerMap.get(BigInt(game?.pretos_captain || ''))}</p>
-                    <ul className="list-inside">
-                        {game.pretos_players?.map((player: any, index: number) => (
-                            <li key={index}>{playerMap.get(BigInt(player)) ?? String(player)}</li>
-                        ))}
-                    </ul>
-                </div>
+            )}
+
+            <div className="w-full mt-4 pt-4 border-t">
+                <GameVoteResults gameId={game.id as number} gameNumero={game.numero} leagueId={league.id} />
             </div>
-            <p className="font-bold">Resultado:</p>
-            <p>{game?.brancos_score} - {game?.pretos_score}</p>
         </div>
     );
 }
