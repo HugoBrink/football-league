@@ -118,21 +118,21 @@ type ViewProps = {
     isAdmin?: boolean;
 };
 
-const MATCH_HEIGHT = 64;
-const MATCH_GAP_BASE = 12;
+const MATCH_H = 76;
+const GAP_R0 = 12;
 
 function BracketView({ rounds, totalRounds, getPlayerName, isAdmin }: ViewProps) {
+    const slot = (r: number) => (MATCH_H + GAP_R0) * Math.pow(2, r);
+
     return (
         <div className="overflow-x-auto pb-4">
             <div className="flex items-start min-w-fit">
                 {rounds.map((roundMatchList, roundIdx) => {
                     const roundNumber = roundIdx + 1;
                     const isLast = roundNumber === totalRounds;
-
-                    // Spacing grows exponentially so matches align vertically across rounds
-                    const gap = MATCH_GAP_BASE * Math.pow(2, roundIdx);
-                    // Top padding to center each round relative to round 1
-                    const topPad = roundIdx === 0 ? 0 : (MATCH_HEIGHT + MATCH_GAP_BASE) * (Math.pow(2, roundIdx) - 1) / 2;
+                    const s = slot(roundIdx);
+                    const topPad = (s - MATCH_H) / 2;
+                    const gap = s - MATCH_H;
 
                     return (
                         <div key={roundIdx} className="flex flex-col shrink-0">
@@ -141,9 +141,8 @@ function BracketView({ rounds, totalRounds, getPlayerName, isAdmin }: ViewProps)
                             </h3>
                             <div className="flex flex-col" style={{ gap: `${gap}px`, paddingTop: `${topPad}px` }}>
                                 {roundMatchList.map((match, idx) => (
-                                    <div key={idx} className="flex items-center">
-                                        {/* Incoming connector (from previous round) */}
-                                        {roundIdx > 0 && <InConnector />}
+                                    <div key={idx} className="flex items-center" style={{ height: `${MATCH_H}px` }}>
+                                        {roundIdx > 0 && <Connector type="in" />}
 
                                         <MatchCard
                                             match={match}
@@ -152,8 +151,7 @@ function BracketView({ rounds, totalRounds, getPlayerName, isAdmin }: ViewProps)
                                             isAdmin={isAdmin}
                                         />
 
-                                        {/* Outgoing connector (to next round) */}
-                                        {!isLast && <OutConnector position={idx} gap={gap} />}
+                                        {!isLast && <Connector type="out" position={idx} slotHeight={s} />}
                                     </div>
                                 ))}
                             </div>
@@ -165,42 +163,40 @@ function BracketView({ rounds, totalRounds, getPlayerName, isAdmin }: ViewProps)
     );
 }
 
-function InConnector() {
-    return (
-        <div className="w-5 flex items-center">
-            <div className="w-full border-t-2 border-gray-300" />
-        </div>
-    );
-}
+function Connector({ type, position, slotHeight }: { type: 'in' | 'out'; position?: number; slotHeight?: number }) {
+    if (type === 'in') {
+        return (
+            <div className="w-6 flex items-center shrink-0">
+                <div className="w-full border-t-2 border-gray-300" />
+            </div>
+        );
+    }
 
-function OutConnector({ position, gap }: { position: number; gap: number }) {
-    const isTop = position % 2 === 0;
-    const verticalHeight = (MATCH_HEIGHT + gap) / 2;
+    const isTop = (position ?? 0) % 2 === 0;
+    const halfSlot = (slotHeight ?? MATCH_H) / 2;
 
     return (
-        <div className="relative w-5" style={{ height: `${MATCH_HEIGHT}px` }}>
-            {/* Horizontal line out */}
-            <div className="absolute left-0 top-1/2 w-2.5 border-t-2 border-gray-300" />
-            {/* Vertical line */}
-            {isTop && (
-                <div
-                    className="absolute border-r-2 border-gray-300"
-                    style={{ right: 0, top: '50%', height: `${verticalHeight}px` }}
-                />
-            )}
-            {!isTop && (
-                <div
-                    className="absolute border-r-2 border-gray-300"
-                    style={{ right: 0, bottom: '50%', height: `${verticalHeight}px` }}
-                />
-            )}
-            {/* Horizontal line to next round */}
+        <div className="relative w-6 shrink-0" style={{ height: `${MATCH_H}px` }}>
+            {/* Horizontal from card */}
+            <div className="absolute left-0 top-1/2 border-t-2 border-gray-300" style={{ width: '12px' }} />
+            {/* Vertical to merge point */}
+            <div
+                className="absolute border-r-2 border-gray-300"
+                style={{
+                    left: '12px',
+                    ...(isTop
+                        ? { top: '50%', height: `${halfSlot}px` }
+                        : { bottom: '50%', height: `${halfSlot}px` }
+                    ),
+                }}
+            />
+            {/* Horizontal out to next round */}
             <div
                 className="absolute border-t-2 border-gray-300"
                 style={{
-                    right: 0,
-                    top: isTop ? `calc(50% + ${verticalHeight}px)` : `calc(50% - ${verticalHeight}px)`,
-                    width: '10px',
+                    left: '12px',
+                    width: '12px',
+                    top: isTop ? `calc(50% + ${halfSlot}px)` : `calc(50% - ${halfSlot}px)`,
                 }}
             />
         </div>
@@ -219,7 +215,7 @@ function MatchCard({ match, getPlayerName, isFinal, isAdmin }: {
 
     if (!match) {
         return (
-            <div className="w-44 border-2 border-dashed border-gray-200 rounded-md bg-gray-50/50" style={{ height: `${MATCH_HEIGHT}px` }}>
+            <div className="w-44 border-2 border-dashed border-gray-200 rounded-md bg-gray-50/50" style={{ height: `${MATCH_H}px` }}>
                 <div className="flex items-center justify-center h-full text-xs text-gray-400">A aguardar</div>
             </div>
         );
@@ -244,8 +240,8 @@ function MatchCard({ match, getPlayerName, isFinal, isAdmin }: {
     return (
         <div className="relative">
             <div
-                className={`w-44 rounded-md overflow-hidden shadow-sm border flex flex-col ${isFinal ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-gray-200'}`}
-                style={{ height: `${MATCH_HEIGHT}px` }}
+            className={`w-44 rounded-md overflow-hidden shadow-sm border flex flex-col ${isFinal ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-gray-200'}`}
+            style={{ height: `${MATCH_H}px` }}
                 onClick={() => canForce && setShowActions(!showActions)}
             >
                 <div className={`flex items-center justify-between px-2 flex-1 ${
