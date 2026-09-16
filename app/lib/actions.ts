@@ -233,9 +233,10 @@ export async function deleteGame(leagueSlug: string, game: Game) {
         data: { game_id: null, winner_id: null }
     });
 
-    // Clean up voting data for this game
+    // Clean up voting data and comments for this game
     await prisma.game_votes.deleteMany({ where: { game_id: game.id } });
     await prisma.voting_sessions.deleteMany({ where: { game_id: game.id } });
+    await prisma.game_comments.deleteMany({ where: { game_id: game.id } });
 
     await prisma.games.delete({ where: { id: game.id } });
     revalidatePath(`/dashboard/${leagueSlug}/tournament`);
@@ -588,4 +589,80 @@ export async function addResultToGame(leagueSlug: string, gameId: number, branco
 
     revalidatePath(`/dashboard/${leagueSlug}`);
     revalidatePath(`/dashboard/${leagueSlug}/tournament`);
+}
+
+// ── Elo Suggestions ──────────────────────────────────────────────────────────
+
+let lastSuggestionAt = 0;
+
+export async function submitEloSuggestion(author: string | null, message: string) {
+    const trimmedMessage = message.trim().slice(0, 1000);
+    const trimmedAuthor = author?.trim().slice(0, 50) || null;
+
+    if (!trimmedMessage) throw new Error('Mensagem não pode estar vazia');
+
+    // Rate limit: 1 suggestion per 15s globally
+    if (Date.now() - lastSuggestionAt < 15_000) {
+        throw new Error('Espera uns segundos antes de enviar outra sugestão.');
+    }
+
+    await prisma.elo_suggestions.create({
+        data: {
+            author: trimmedAuthor,
+            message: trimmedMessage,
+        },
+    });
+
+    lastSuggestionAt = Date.now();
+    revalidatePath('/players/elo');
+}
+
+export async function deleteEloSuggestion(id: number) {
+    const session = await auth();
+    if (!session?.user) throw new Error('Apenas admins podem apagar sugestões');
+
+    await prisma.elo_suggestions.delete({ where: { id } });
+    revalidatePath('/players/elo');
+}
+
+// ── Game Comments ────────────────────────────────────────────────────────────
+
+const commentCooldowns = new Map<string, number>();
+
+export async function submitGameComment(gameId: number, author: string, message: string) {
+    const trimmedAuthor = author.trim().slice(0, 50);
+    const trimmedMessage = message.trim().slice(0, 500);
+
+    if (!trimmedAuthor) throw new Error('Nome não pode estar vazio');
+    if (!trimmedMessage) throw new Error('Comentário não pode estar vazio');
+
+    // Rate limit: 1 comment per 10s per author+game
+    const key = `${gameId}:${trimmedAuthor.toLowerCase()}`;
+    const last = commentCooldowns.get(key) ?? 0;
+    if (Date.now() - last < 10_000) {
+        throw new Error('Espera uns segundos antes de comentar novamente.');
+    }
+
+    // Verify game exists
+    const game = await prisma.games.findUnique({ where: { id: gameId }, select: { id: true } });
+    if (!game) throw new Error('Jogo não encontrado');
+
+    await prisma.game_comments.create({
+        data: {
+            game_id: gameId,
+            author: trimmedAuthor,
+            message: trimmedMessage,
+        },
+    });
+
+    commentCooldowns.set(key, Date.now());
+    revalidatePath('/dashboard');
+}
+
+export async function deleteGameComment(id: number) {
+    const session = await auth();
+    if (!session?.user) throw new Error('Apenas admins podem apagar comentários');
+
+    await prisma.game_comments.delete({ where: { id } });
+    revalidatePath('/dashboard');
 }

@@ -1445,3 +1445,21 @@ export async function fetchPaidPlayers(gameId: number): Promise<string[]> {
     });
     return votes.map(v => v.voter_name);
 }
+
+// ── Elo Suggestions ──────────────────────────────────────────────────────────
+
+export async function fetchEloSuggestions() {
+    return prisma.elo_suggestions.findMany({
+        orderBy: { created_at: 'desc' },
+        take: 50,
+    });
+}
+
+// ── Game Comments ────────────────────────────────────────────────────────────
+
+export async function fetchGameComments(gameId: number) {
+    return prisma.game_comments.findMany({
+        where: { game_id: gameId },
+        orderBy: { created_at: 'desc' },
+    });
+}

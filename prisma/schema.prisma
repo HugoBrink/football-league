@@ -111,3 +111,20 @@ model voting_sessions {
 
   @@index([league_id])
 }
+
+model elo_suggestions {
+  id         Int      @id @default(autoincrement())
+  author     String?
+  message    String
+  created_at DateTime @default(now())
+}
+
+model game_comments {
+  id         Int      @id @default(autoincrement())
+  game_id    Int
+  author     String
+  message    String
+  created_at DateTime @default(now())
+
+  @@index([game_id])
+}

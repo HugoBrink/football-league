@@ -1,9 +1,11 @@
-import { computeEloSnapshotForGame, fetchGame, getLeagueBySlug } from "@/app/lib/data";
+import { computeEloSnapshotForGame, fetchGame, fetchGameComments, getLeagueBySlug } from "@/app/lib/data";
 import GameEloBreakdown from "@/app/components/GameEloBreakdown";
 import GameVoteResults from "@/app/components/GameVoteResults";
+import GameComments from "@/app/components/GameComments";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 
 export default async function Page({ params }: { params: Promise<{ id: string; season: string; league: string }> }) {
     const { id, season, league: leagueSlug } = await params;
@@ -15,7 +17,12 @@ export default async function Page({ params }: { params: Promise<{ id: string; s
     if (!game) return <div>Game not found</div>;
 
     const hasResult = game.brancos_score != null && game.pretos_score != null;
-    const eloSnapshot = hasResult ? await computeEloSnapshotForGame(league.id, game.id as number) : null;
+    const gameId = game.id as number;
+    const [eloSnapshot, comments, session] = await Promise.all([
+        hasResult ? computeEloSnapshotForGame(league.id, gameId) : null,
+        fetchGameComments(gameId),
+        auth(),
+    ]);
 
     return (
         <div className="w-full flex flex-col items-center gap-2">
@@ -39,7 +46,11 @@ export default async function Page({ params }: { params: Promise<{ id: string; s
             )}
 
             <div className="w-full mt-4 pt-4 border-t">
-                <GameVoteResults gameId={game.id as number} gameNumero={game.numero} leagueId={league.id} />
+                <GameVoteResults gameId={gameId} gameNumero={game.numero} leagueId={league.id} />
+            </div>
+
+            <div className="w-full max-w-2xl mx-auto mt-4">
+                <GameComments gameId={gameId} comments={comments} isAdmin={!!session?.user} />
             </div>
         </div>
     );

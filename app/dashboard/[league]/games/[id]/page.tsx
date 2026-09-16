@@ -1,8 +1,9 @@
-import { computeEloSnapshotForGame, fetchGame, fetchGamePlayerNames, fetchGameTeamsWithElo, fetchVoterNames, fetchPaidPlayers, getLeagueBySlug } from "@/app/lib/data";
+import { computeEloSnapshotForGame, fetchGame, fetchGameComments, fetchGamePlayerNames, fetchGameTeamsWithElo, fetchVoterNames, fetchPaidPlayers, getLeagueBySlug } from "@/app/lib/data";
 import { DeleteGame } from "@/app/components/DeleteGame";
 import { EditGame } from "@/app/components/EditGame";
 import GameEloBreakdown from "@/app/components/GameEloBreakdown";
 import GameVoteResults from "@/app/components/GameVoteResults";
+import GameComments from "@/app/components/GameComments";
 import AddResultForm from "@/app/components/AddResultForm";
 import AdminPaymentToggle from "@/app/components/AdminPaymentToggle";
 import { Game } from "@/app/lib/definitions";
@@ -22,13 +23,14 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
     const hasResult = game.brancos_score != null && game.pretos_score != null;
     const gameId = game.id as number;
 
-    const [eloSnapshot, teamsWithElo, session, voters, paidPlayers, playerNames] = await Promise.all([
+    const [eloSnapshot, teamsWithElo, session, voters, paidPlayers, playerNames, comments] = await Promise.all([
         hasResult ? computeEloSnapshotForGame(league.id, gameId) : null,
         fetchGameTeamsWithElo(gameId),
         auth(),
         fetchVoterNames(gameId),
         fetchPaidPlayers(gameId),
         fetchGamePlayerNames(gameId),
+        fetchGameComments(gameId),
     ]);
 
     const voterSet = new Set(voters);
@@ -130,6 +132,10 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
 
             <div className="w-full mt-4 pt-4 border-t">
                 <GameVoteResults gameId={gameId} gameNumero={game.numero} leagueId={league.id} showAdminControls={!!session?.user} />
+            </div>
+
+            <div className="w-full max-w-2xl mx-auto mt-4">
+                <GameComments gameId={gameId} comments={comments} isAdmin={!!session?.user} />
             </div>
 
             {session?.user && (

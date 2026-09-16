@@ -1,5 +1,7 @@
-import { computeEloRatings, getAllLeagues, getLeagueBySlug, getLeagueSeasons } from "@/app/lib/data";
+import { computeEloRatings, fetchEloSuggestions, getAllLeagues, getLeagueBySlug, getLeagueSeasons } from "@/app/lib/data";
+import { auth } from "@/auth";
 import EloTable from "./EloTable";
+import EloSuggestionBox from "./EloSuggestionBox";
 
 export const dynamic = 'force-dynamic';
 
@@ -17,16 +19,16 @@ export default async function EloPage({ searchParams }: { searchParams: Promise<
 
     if (!league) return <div>Liga nao encontrada</div>;
 
-    // Default to current season; "overall" is opt-in
-    const season = seasonParam === 'overall'
-        ? undefined
-        : seasonParam
-            ? Number(seasonParam)
-            : league.current_season;
+    // Default to overall; specific season is opt-in
+    const season = seasonParam && seasonParam !== 'overall'
+        ? Number(seasonParam)
+        : undefined;
 
-    const [ratings, seasons] = await Promise.all([
+    const [ratings, seasons, suggestions, session] = await Promise.all([
         computeEloRatings(league.id, season),
         getLeagueSeasons(league.id),
+        fetchEloSuggestions(),
+        auth(),
     ]);
 
     return (
@@ -44,6 +46,11 @@ export default async function EloPage({ searchParams }: { searchParams: Promise<
                 seasons={seasons}
                 currentSeason={season}
                 leagueSlug={league.slug}
+            />
+
+            <EloSuggestionBox
+                suggestions={suggestions}
+                isAdmin={!!session?.user}
             />
         </div>
     );
