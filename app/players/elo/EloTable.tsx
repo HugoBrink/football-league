@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import Link from 'next/link'
 
 type HistoryPoint = { gameNum: number; elo: number; date: Date }
 
@@ -24,6 +25,7 @@ type Props = {
     ratings: EloEntry[]
     seasons: number[]
     currentSeason: number | undefined
+    leagueSlug: string
 }
 
 // ─── Mini chart (inline in table row) ────────────────────────────────────────
@@ -138,8 +140,230 @@ function FullChart({ history }: { history: HistoryPoint[] }) {
     )
 }
 
+// ─── FAQ Tables ──────────────────────────────────────────────────────────────
+function FaqTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+    return (
+        <div className="overflow-x-auto my-2">
+            <table className="w-full text-xs border-collapse">
+                <thead>
+                    <tr className="bg-gray-100">
+                        {headers.map(h => (
+                            <th key={h} className="px-2 py-1.5 text-left font-semibold border border-gray-200">{h}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            {row.map((cell, j) => (
+                                <td key={j} className="px-2 py-1.5 border border-gray-200">{cell}</td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// ─── FAQ component ───────────────────────────────────────────────────────────
+function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className="mt-4">
+            <button
+                onClick={() => setOpen(!open)}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+                <span>{open ? '▾' : '▸'}</span>
+                <span className="font-medium">ℹ️ FAQ — Como funciona o Elo?</span>
+            </button>
+            {open && (
+                <div className="mt-3 space-y-3 text-sm">
+                    {currentSeason == null ? (
+                        <p className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                            Modo <strong>Overall</strong> — conta todos os jogos de todas as seasons (cumulativo).
+                        </p>
+                    ) : (
+                        <p className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+                            Modo <strong>Season {currentSeason}</strong> — apenas jogos desta season (todos começam em 1000).
+                        </p>
+                    )}
+
+                    {/* 1. Como funciona */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            Como funciona o Elo?
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-2">
+                            <p>Todos começam com <strong>1000 pontos</strong>. Ganhar a quem é melhor que tu dá mais pontos, perder contra quem é pior tira mais.</p>
+                            <p>O <strong>Elo da equipa</strong> é a média dos Elos individuais de todos os jogadores. Todos na mesma equipa ganham/perdem o mesmo.</p>
+                            <p>O Elo é <strong>cumulativo</strong> — nunca reseta entre seasons.</p>
+                        </div>
+                    </details>
+
+                    {/* 2. Equipas equilibradas */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            Equipas equilibradas (1000 vs 1000)
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
+                            <p>Quando as equipas têm Elo igual, ambas têm 50% de probabilidade de ganhar:</p>
+                            <FaqTable
+                                headers={['Resultado', 'Vencedor', 'Perdedor']}
+                                rows={[
+                                    ['2-1 (normal)', '+16', '-16'],
+                                    ['4-1 (goleada)', '+20', '-20'],
+                                    ['Empate', '0', '0'],
+                                ]}
+                            />
+                        </div>
+                    </details>
+
+                    {/* 3. Favorito vs Underdog */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            Favorito (1050) vs Underdog (950)
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
+                            <p>O favorito tem ~64% de chance de ganhar:</p>
+                            <FaqTable
+                                headers={['Cenário', 'Favorito', 'Underdog']}
+                                rows={[
+                                    ['Favorito ganha 3-1', '+12', '-12'],
+                                    ['Favorito ganha 5-0 (goleada)', '+17', '-17'],
+                                    ['Empate 2-2', '-5', '+5'],
+                                    ['Upset! Underdog ganha 2-1', '-21', '+21'],
+                                ]}
+                            />
+                        </div>
+                    </details>
+
+                    {/* 4. Grande diferença */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            Grande favorito (1100) vs Grande underdog (900)
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
+                            <p>O favorito tem ~76% de chance de ganhar:</p>
+                            <FaqTable
+                                headers={['Cenário', 'Favorito', 'Underdog']}
+                                rows={[
+                                    ['Favorito ganha 2-1', '+8', '-8'],
+                                    ['Upset! Underdog ganha 2-1', '-24', '+24'],
+                                    ['Upset + Goleada! Underdog ganha 4-0', '-36', '+36'],
+                                ]}
+                            />
+                        </div>
+                    </details>
+
+                    {/* 5. Goleadas */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            Goleadas contam mais?
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
+                            <p>Sim! A partir de 3 golos de diferença o impacto no Elo aumenta:</p>
+                            <FaqTable
+                                headers={['Diferença de golos', 'Multiplicador', 'Efeito']}
+                                rows={[
+                                    ['0-2 golos', '1.0x', 'Normal'],
+                                    ['3 golos', '1.25x', '+25%'],
+                                    ['4 golos', '1.5x', '+50%'],
+                                    ['5+ golos', '1.75x', '+75% (máximo)'],
+                                ]}
+                            />
+                            <p>Se eras favorito e levaste uma goleada, perdes muito mais do que numa derrota normal.</p>
+                        </div>
+                    </details>
+
+                    {/* 6. Desequilíbrio */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            Quando é que um jogo é desequilibrado?
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
+                            <FaqTable
+                                headers={['Diferença Elo', 'Chance do favorito', 'Favorito ganha', 'Upset']}
+                                rows={[
+                                    ['0', '50%', '+16', '+16'],
+                                    ['30', '54%', '+15', '+17'],
+                                    ['50', '57%', '+14', '+18'],
+                                    ['100', '64%', '+12', '+21'],
+                                    ['150', '70%', '+10', '+23'],
+                                    ['200', '76%', '+8', '+24'],
+                                ]}
+                            />
+                            <p>Até ~50 pontos é praticamente justo. A partir de <strong>100+</strong> nota-se, e com <strong>200+</strong> é claramente desequilibrado.</p>
+                        </div>
+                    </details>
+
+                    {/* 7. Origem dos valores */}
+                    <details className="group border rounded-lg">
+                        <summary className="px-3 py-2 cursor-pointer font-medium text-gray-700 hover:text-gray-900 select-none">
+                            De onde vêm estes valores?
+                        </summary>
+                        <div className="px-3 pb-3 text-gray-600 text-xs space-y-2">
+                            <p>O sistema Elo foi inventado por <strong>Arpad Elo</strong> nos anos 60 para classificar jogadores de xadrez. É o mesmo sistema que a FIFA usa para rankings de seleções e que sites como o FiveThirtyEight usam para prever resultados de futebol.</p>
+
+                            <p className="font-semibold text-gray-700 mt-2">A fórmula:</p>
+                            <div className="bg-gray-100 rounded p-3 flex flex-col items-start gap-3">
+                                {/* Formula 1: Expected result */}
+                                <div className="flex items-center gap-1.5 font-mono text-[12px]">
+                                    <span className="italic">E</span>
+                                    <span>=</span>
+                                    <div className="inline-flex flex-col items-center">
+                                        <span className="px-2">1</span>
+                                        <span className="border-t border-gray-500 px-2 whitespace-nowrap">
+                                            1 + 10<sup className="text-[9px]">(Elo<sub>adv</sub> − Elo<sub>eq</sub>) / 400</sup>
+                                        </span>
+                                    </div>
+                                </div>
+                                {/* Formula 2: Elo change */}
+                                <div className="flex items-center gap-1.5 font-mono text-[12px]">
+                                    <span>Δ<span className="italic">Elo</span></span>
+                                    <span>=</span>
+                                    <span><span className="italic">K</span> × <span className="italic">M</span> × (<span className="italic">R</span> − <span className="italic">E</span>)</span>
+                                </div>
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-1 space-y-0.5">
+                                <p><span className="italic font-mono">E</span> = resultado esperado (probabilidade de ganhar)</p>
+                                <p><span className="italic font-mono">K</span> = 32 &nbsp; <span className="italic font-mono">M</span> = multiplicador de goleada &nbsp; <span className="italic font-mono">R</span> = resultado real (1 = vitória, 0.5 = empate, 0 = derrota)</p>
+                            </div>
+
+                            <p className="font-semibold text-gray-700 mt-2">Os parâmetros:</p>
+                            <FaqTable
+                                headers={['Parâmetro', 'Valor', 'O que faz']}
+                                rows={[
+                                    ['K', '32', 'Controla a volatilidade — quantos pontos se trocam por jogo. Mais alto = mudanças maiores. (No xadrez de elite usam 16, para principiantes 40)'],
+                                    ['Escala', '400', 'Controla o peso da diferença de Elo. Com 400 pts de diferença, o favorito tem ~91% de chance'],
+                                    ['Elo inicial', '1000', 'O ponto de partida para todos. Arbitrário (no xadrez usam 1500)'],
+                                    ['Multiplicador', '1.0 – 1.75x', 'Amplifica o K em goleadas (3+ golos). Não é Elo original — inspirado no FiveThirtyEight'],
+                                ]}
+                            />
+
+                            <p className="font-semibold text-gray-700 mt-2">Exemplo passo a passo:</p>
+                            <div className="bg-gray-100 rounded p-2 text-[11px] space-y-0.5">
+                                <p>Equipa A (Elo 1050) vs Equipa B (Elo 950). A ganha 4-1.</p>
+                                <p>1. Resultado esperado de A = 1 / (1 + 10^((950-1050)/400)) = <strong>0.64</strong> (64%)</p>
+                                <p>2. Resultado real de A = <strong>1</strong> (vitória)</p>
+                                <p>3. Multiplicador = <strong>1.25</strong> (3 golos de diferença)</p>
+                                <p>4. Δ Elo = 32 × 1.25 × (1 − 0.64) = <strong>+14</strong></p>
+                                <p>→ A sobe para 1064, B desce para 936.</p>
+                            </div>
+                        </div>
+                    </details>
+
+                    <p className="text-xs text-gray-400">Clica nas colunas do cabeçalho para mudar a ordenação. Clica num jogador para ver o gráfico.</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
-export default function EloTable({ ratings, seasons, currentSeason }: Props) {
+export default function EloTable({ ratings, seasons, currentSeason, leagueSlug }: Props) {
     const [expanded, setExpanded] = useState<string | null>(null)
     const [sortBy, setSortBy] = useState<SortField>('elo')
     const [minGames, setMinGames] = useState(5)
@@ -270,21 +494,21 @@ export default function EloTable({ ratings, seasons, currentSeason }: Props) {
                     {/* 2nd place */}
                     <div className="text-center">
                         <div className="text-2xl">🥈</div>
-                        <div className="font-semibold text-sm">{filtered[1].name}</div>
+                        <Link href={`/players/${encodeURIComponent(filtered[1].name)}?league=${leagueSlug}`} className="font-semibold text-sm hover:text-blue-600 hover:underline">{filtered[1].name}</Link>
                         <div className="text-lg font-bold">{filtered[1].elo}</div>
                         <div className="bg-slate-300 rounded-t w-20 h-16" />
                     </div>
                     {/* 1st place */}
                     <div className="text-center">
                         <div className="text-3xl">🥇</div>
-                        <div className="font-bold">{filtered[0].name}</div>
+                        <Link href={`/players/${encodeURIComponent(filtered[0].name)}?league=${leagueSlug}`} className="font-bold hover:text-blue-600 hover:underline">{filtered[0].name}</Link>
                         <div className="text-xl font-bold text-yellow-600">{filtered[0].elo}</div>
                         <div className="bg-yellow-300 rounded-t w-20 h-24" />
                     </div>
                     {/* 3rd place */}
                     <div className="text-center">
                         <div className="text-2xl">🥉</div>
-                        <div className="font-semibold text-sm">{filtered[2].name}</div>
+                        <Link href={`/players/${encodeURIComponent(filtered[2].name)}?league=${leagueSlug}`} className="font-semibold text-sm hover:text-blue-600 hover:underline">{filtered[2].name}</Link>
                         <div className="text-lg font-bold">{filtered[2].elo}</div>
                         <div className="bg-amber-200 rounded-t w-20 h-12" />
                     </div>
@@ -351,7 +575,13 @@ export default function EloTable({ ratings, seasons, currentSeason }: Props) {
                                         <td className="px-3 py-2 font-mono text-gray-500">{idx + 1}</td>
                                         <td className="px-3 py-2">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium">{r.name}</span>
+                                                <Link
+                                                    href={`/players/${encodeURIComponent(r.name)}?league=${leagueSlug}`}
+                                                    className="font-medium hover:text-blue-600 hover:underline"
+                                                    onClick={e => e.stopPropagation()}
+                                                >
+                                                    {r.name}
+                                                </Link>
                                                 <span className={`text-xs font-mono ${diff >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                                     {diff >= 0 ? '+' : ''}{diff}
                                                 </span>
@@ -399,16 +629,8 @@ export default function EloTable({ ratings, seasons, currentSeason }: Props) {
 
             </div>{/* end loading overlay wrapper */}
 
-            {/* ─── Legend ─────────────────────────────────────── */}
-            <div className="text-xs text-gray-500 space-y-1 mt-4">
-                <p>ℹ️ O sistema Elo começa em 1000 para todos os jogadores. Ganhar contra equipas com Elo mais alto dá mais pontos.</p>
-                {currentSeason == null ? (
-                    <p>Modo <strong>Overall</strong> — conta todos os jogos de todas as seasons (cumulativo).</p>
-                ) : (
-                    <p>Modo <strong>Season {currentSeason}</strong> — apenas jogos desta season (todos começam em 1000).</p>
-                )}
-                <p>Clica nas colunas do cabeçalho para mudar a ordenação. Clica num jogador para ver o gráfico.</p>
-            </div>
+            {/* ─── FAQ ─────────────────────────────────────── */}
+            <EloFAQ currentSeason={currentSeason} />
         </div>
     )
 }

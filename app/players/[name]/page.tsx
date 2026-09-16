@@ -1,4 +1,4 @@
-import { fetchPlayerAllSeasons, fetchPlayerMVPStats, getAllLeagues, computeEloRatings } from "@/app/lib/data";
+import { fetchPlayerAllSeasons, fetchPlayerMVPStats, getAllLeagues, computeEloRatings, computePlayerEloHistory } from "@/app/lib/data";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { ArrowLeft } from "lucide-react";
@@ -23,11 +23,12 @@ export default async function PlayerProfilePage({ params, searchParams }: {
 
     if (!league) notFound();
 
-    const [seasonRows, session, mvpStats, eloData] = await Promise.all([
+    const [seasonRows, session, mvpStats, eloData, eloHistory] = await Promise.all([
         fetchPlayerAllSeasons(playerName, league.id),
         auth(),
         fetchPlayerMVPStats(playerName, league.id),
         computeEloRatings(league.id),
+        computePlayerEloHistory(playerName, league.id),
     ]);
 
     if (seasonRows.length === 0) notFound();
@@ -142,6 +143,82 @@ export default async function PlayerProfilePage({ params, searchParams }: {
                                 <div className="text-xs text-gray-500">{stat.label}</div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Elo History */}
+            {eloHistory.length > 0 && (
+                <div>
+                    <h2 className="font-semibold text-sm mb-2">Histórico Elo</h2>
+                    <div className="rounded-lg border overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-2 py-1.5 text-left font-medium">#</th>
+                                        <th className="px-2 py-1.5 text-left font-medium">Jogo</th>
+                                        <th className="px-2 py-1.5 text-center font-medium">Res.</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">Antes</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">Δ</th>
+                                        <th className="px-2 py-1.5 text-right font-medium">Depois</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {[...eloHistory].reverse().map((entry) => {
+                                        const teamCaptain = entry.playerTeam === 'brancos' ? entry.captainBrancos : entry.captainPretos;
+                                        const oppCaptain = entry.playerTeam === 'brancos' ? entry.captainPretos : entry.captainBrancos;
+                                        const teamAvg = entry.playerTeam === 'brancos' ? entry.brancosAvgElo : entry.pretosAvgElo;
+                                        const oppAvg = entry.playerTeam === 'brancos' ? entry.pretosAvgElo : entry.brancosAvgElo;
+                                        const teamScore = entry.playerTeam === 'brancos' ? entry.brancosScore : entry.pretosScore;
+                                        const oppScore = entry.playerTeam === 'brancos' ? entry.pretosScore : entry.brancosScore;
+
+                                        return (
+                                            <tr key={entry.gameId} className="hover:bg-gray-50">
+                                                <td className="px-2 py-1.5 text-gray-400">{entry.season}</td>
+                                                <td className="px-2 py-1.5">
+                                                    <Link
+                                                        href={`/dashboard/${league.slug}/games/${entry.gameId}`}
+                                                        className="text-blue-600 hover:underline font-medium"
+                                                    >
+                                                        #{entry.gameNumero}
+                                                    </Link>
+                                                    <span className="text-gray-400 ml-1">
+                                                        {new Date(entry.date).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
+                                                    </span>
+                                                    <div className="text-[10px] mt-0.5 leading-tight">
+                                                        <span className={`font-bold text-gray-700 ${entry.result === 'win' ? 'underline' : ''}`}>
+                                                            {teamCaptain ? `©${teamCaptain}` : entry.playerTeam === 'brancos' ? 'Brancos' : 'Pretos'}
+                                                        </span>
+                                                        <span className="text-gray-400 tabular-nums ml-0.5">({teamAvg})</span>
+                                                        <span className="text-gray-400"> vs </span>
+                                                        <span className={`text-gray-500 ${entry.result === 'loss' ? 'underline' : ''}`}>
+                                                            {oppCaptain ? `©${oppCaptain}` : entry.playerTeam === 'brancos' ? 'Pretos' : 'Brancos'}
+                                                        </span>
+                                                        <span className="text-gray-400 tabular-nums ml-0.5">({oppAvg})</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    <span className={`font-bold ${
+                                                        entry.result === 'win' ? 'text-green-600' :
+                                                        entry.result === 'loss' ? 'text-red-500' : 'text-gray-500'
+                                                    }`}>
+                                                        {teamScore}-{oppScore}
+                                                    </span>
+                                                </td>
+                                                <td className="px-2 py-1.5 text-right tabular-nums text-gray-500">{entry.eloBefore}</td>
+                                                <td className={`px-2 py-1.5 text-right tabular-nums font-bold ${
+                                                    entry.delta > 0 ? 'text-green-600' : entry.delta < 0 ? 'text-red-500' : 'text-gray-500'
+                                                }`}>
+                                                    {entry.delta > 0 ? '+' : ''}{entry.delta}
+                                                </td>
+                                                <td className="px-2 py-1.5 text-right tabular-nums font-bold">{entry.eloAfter}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             )}

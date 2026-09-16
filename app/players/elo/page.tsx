@@ -43,6 +43,7 @@ export default async function EloPage({ searchParams }: { searchParams: Promise<
                 ratings={ratings}
                 seasons={seasons}
                 currentSeason={season}
+                leagueSlug={league.slug}
             />
         </div>
     );

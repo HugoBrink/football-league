@@ -561,9 +561,89 @@ export async function computeSeasonStats(season: number, leagueId: number) {
         .map(e => ({ name: e.name, id: e.id, goalsDiff: e.goalsDiff }))
         .sort((a, b) => a.goalsDiff - b.goalsDiff);
 
+    // Most unbalanced game (biggest Elo difference between teams)
+    // We need to compute Elo up to each game to find the difference
+    // Load ALL players across all seasons for correct name resolution
+    const allPlayersForElo = await prisma.players.findMany({
+        where: { league_id: leagueId },
+        select: { id: true, name: true },
+    });
+    const eloForStats = new Map<string, number>();
+    const getEloStat = (name: string) => eloForStats.get(name) ?? ELO_INITIAL;
+    const nameByIdMap = new Map<string, string>();
+    for (const p of allPlayersForElo) nameByIdMap.set(String(p.id), p.name);
+    const resolveNameStat = (pid: string): string => nameByIdMap.get(pid) ?? pid;
+
+    type GameEloDiff = {
+        gameId: number;
+        gameNumero: number;
+        date: Date;
+        brancosAvg: number;
+        pretosAvg: number;
+        eloDiff: number;
+        brancosScore: number;
+        pretosScore: number;
+        captainBrancos: string | null;
+        captainPretos: string | null;
+        underdogWon: boolean;
+    };
+
+    const gameEloDiffs: GameEloDiff[] = [];
+
+    // We need all league games (not just this season) to compute Elo, but only report season games
+    const allLeagueGames = await prisma.games.findMany({
+        where: { league_id: leagueId },
+        orderBy: [{ season: 'asc' }, { date: 'asc' }, { numero: 'asc' }],
+    });
+
+    for (const game of allLeagueGames) {
+        if (game.brancos_score == null || game.pretos_score == null) continue;
+
+        const { brancosNames, pretosNames, captainB, captainP } = resolveGameTeams(game, resolveNameStat);
+        if (brancosNames.length === 0 || pretosNames.length === 0) continue;
+
+        const avgB = brancosNames.reduce((s, n) => s + getEloStat(n), 0) / brancosNames.length;
+        const avgP = pretosNames.reduce((s, n) => s + getEloStat(n), 0) / pretosNames.length;
+
+        if (game.season === season) {
+            const diff = Math.abs(avgB - avgP);
+            const brancosWon = game.brancos_score > game.pretos_score;
+            const pretosWon = game.pretos_score > game.brancos_score;
+            const favoriteBrancos = avgB > avgP;
+            const underdogWon = (favoriteBrancos && pretosWon) || (!favoriteBrancos && brancosWon);
+
+            gameEloDiffs.push({
+                gameId: game.id,
+                gameNumero: game.numero,
+                date: game.date as unknown as Date,
+                brancosAvg: Math.round(avgB),
+                pretosAvg: Math.round(avgP),
+                eloDiff: Math.round(diff),
+                brancosScore: game.brancos_score,
+                pretosScore: game.pretos_score,
+                captainBrancos: captainB ? resolveNameStat(captainB) : null,
+                captainPretos: captainP ? resolveNameStat(captainP) : null,
+                underdogWon,
+            });
+        }
+
+        // Update elos for next game
+        const expB = expectedScore(avgB, avgP);
+        const actB = game.brancos_score === game.pretos_score ? 0.5 : (game.brancos_score > game.pretos_score ? 1 : 0);
+        const mm = marginMultiplier(game.brancos_score! - game.pretos_score!);
+        const deltaB = ELO_K * mm * (actB - expB);
+        const deltaP = ELO_K * mm * ((1 - actB) - (1 - expB));
+        for (const n of brancosNames) eloForStats.set(n, getEloStat(n) + deltaB);
+        for (const n of pretosNames) eloForStats.set(n, getEloStat(n) + deltaP);
+    }
+
+    const mostUnbalancedGames = [...gameEloDiffs].sort((a, b) => b.eloDiff - a.eloDiff);
+    const biggestUpsets = [...gameEloDiffs].filter(g => g.underdogWon).sort((a, b) => b.eloDiff - a.eloDiff);
+
     return {
         byWinRate, byAvgGD, byGamesPlayed, byFormLast5, byConsistency,
         byCaptainWinRate, byCaptainGames, byClutchWins, byBlowoutWins, byBlowoutLosses, byWorstGD,
+        mostUnbalancedGames, biggestUpsets,
     } as const;
 }
 
@@ -580,6 +660,14 @@ const ELO_K = 32;
 
 function expectedScore(ratingA: number, ratingB: number): number {
     return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+// Margin of victory multiplier — goleadas (3+ goal diff) have more Elo impact
+// GD 0-2: 1.0x (normal), GD 3: 1.25x, GD 4: 1.5x, GD 5+: 1.75x (max)
+function marginMultiplier(goalDiff: number): number {
+    const gd = Math.abs(goalDiff);
+    if (gd < 3) return 1.0;
+    return Math.min(1.75, 1.0 + (gd - 2) * 0.25);
 }
 
 type EloHistoryPoint = { gameNum: number; elo: number; date: Date };
@@ -673,10 +761,11 @@ export async function computeEloRatings(leagueId: number, season?: number) {
         const brancosWon = game.brancos_score > game.pretos_score;
         const actualB = isDraw ? 0.5 : (brancosWon ? 1 : 0);
         const actualP = 1 - actualB;
+        const mm = marginMultiplier(game.brancos_score - game.pretos_score);
 
         for (const name of brancosNames) {
             const entry = getElo(name);
-            entry.elo += ELO_K * (actualB - expB);
+            entry.elo += ELO_K * mm * (actualB - expB);
             entry.games++;
             if (isDraw) entry.draws++;
             else if (brancosWon) entry.wins++;
@@ -686,7 +775,7 @@ export async function computeEloRatings(leagueId: number, season?: number) {
         }
         for (const name of pretosNames) {
             const entry = getElo(name);
-            entry.elo += ELO_K * (actualP - expP);
+            entry.elo += ELO_K * mm * (actualP - expP);
             entry.games++;
             if (isDraw) entry.draws++;
             else if (!brancosWon) entry.wins++;
@@ -714,6 +803,109 @@ export async function computeEloRatings(leagueId: number, season?: number) {
 
     results.sort((a, b) => b.elo - a.elo);
     return results;
+}
+
+// ---------------------------------------------------------------------------
+// Detailed Elo history for a specific player (for profile page)
+// ---------------------------------------------------------------------------
+
+export type PlayerEloGameEntry = {
+    gameNumero: number;
+    gameId: number;
+    date: Date;
+    season: number;
+    captainBrancos: string | null;
+    captainPretos: string | null;
+    brancosAvgElo: number;
+    pretosAvgElo: number;
+    brancosScore: number;
+    pretosScore: number;
+    playerTeam: 'brancos' | 'pretos';
+    result: 'win' | 'loss' | 'draw';
+    eloBefore: number;
+    eloAfter: number;
+    delta: number;
+};
+
+export async function computePlayerEloHistory(playerName: string, leagueId: number): Promise<PlayerEloGameEntry[]> {
+    const allGames = await prisma.games.findMany({
+        where: { league_id: leagueId },
+        orderBy: [{ season: 'asc' }, { date: 'asc' }, { numero: 'asc' }],
+    });
+
+    const allPlayers = await prisma.players.findMany({
+        where: { league_id: leagueId },
+        select: { id: true, name: true },
+    });
+
+    const nameById = new Map<string, string>();
+    for (const p of allPlayers) nameById.set(String(p.id), p.name);
+    const resolveName = (pid: string): string => nameById.get(pid) ?? pid;
+
+    const eloByName = new Map<string, number>();
+    const getElo = (name: string) => eloByName.get(name) ?? ELO_INITIAL;
+
+    const history: PlayerEloGameEntry[] = [];
+
+    for (const game of allGames) {
+        if (game.brancos_score == null || game.pretos_score == null) continue;
+
+        const { brancosNames, pretosNames, captainB, captainP } = resolveGameTeams(game, resolveName);
+        if (brancosNames.length === 0 || pretosNames.length === 0) continue;
+
+        const avgBrancos = brancosNames.reduce((s, n) => s + getElo(n), 0) / brancosNames.length;
+        const avgPretos = pretosNames.reduce((s, n) => s + getElo(n), 0) / pretosNames.length;
+        const expB = expectedScore(avgBrancos, avgPretos);
+        const expP = 1 - expB;
+
+        const isDraw = game.brancos_score === game.pretos_score;
+        const brancosWon = game.brancos_score > game.pretos_score;
+        const actualB = isDraw ? 0.5 : (brancosWon ? 1 : 0);
+        const actualP = 1 - actualB;
+        const mm = marginMultiplier(game.brancos_score - game.pretos_score);
+
+        const rawDeltaB = ELO_K * mm * (actualB - expB);
+        const rawDeltaP = ELO_K * mm * (actualP - expP);
+
+        const isInBrancos = brancosNames.includes(playerName);
+        const isInPretos = pretosNames.includes(playerName);
+
+        if (isInBrancos || isInPretos) {
+            const before = getElo(playerName);
+            const rawDelta = isInBrancos ? rawDeltaB : rawDeltaP;
+            const after = before + rawDelta;
+            const roundedBefore = Math.round(before);
+            const roundedAfter = Math.round(after);
+
+            const result: 'win' | 'loss' | 'draw' = isDraw
+                ? 'draw'
+                : (isInBrancos ? brancosWon : !brancosWon) ? 'win' : 'loss';
+
+            history.push({
+                gameNumero: game.numero,
+                gameId: game.id,
+                date: game.date as unknown as Date,
+                season: game.season,
+                captainBrancos: captainB ? resolveName(captainB) : null,
+                captainPretos: captainP ? resolveName(captainP) : null,
+                brancosAvgElo: Math.round(avgBrancos),
+                pretosAvgElo: Math.round(avgPretos),
+                brancosScore: game.brancos_score,
+                pretosScore: game.pretos_score,
+                playerTeam: isInBrancos ? 'brancos' : 'pretos',
+                result,
+                eloBefore: roundedBefore,
+                eloAfter: roundedAfter,
+                delta: roundedAfter - roundedBefore,
+            });
+        }
+
+        // Update all elos
+        for (const n of brancosNames) eloByName.set(n, getElo(n) + rawDeltaB);
+        for (const n of pretosNames) eloByName.set(n, getElo(n) + rawDeltaP);
+    }
+
+    return history;
 }
 
 // ---------------------------------------------------------------------------
@@ -782,8 +974,9 @@ export async function computeEloSnapshotForGame(leagueId: number, gameId: number
         const brancosSnapshots: PlayerEloSnapshot[] = [];
         const pretosSnapshots: PlayerEloSnapshot[] = [];
 
-        const rawDeltaB = ELO_K * (actualB - expB);
-        const rawDeltaP = ELO_K * (actualP - expP);
+        const mm = marginMultiplier(game.brancos_score - game.pretos_score);
+        const rawDeltaB = ELO_K * mm * (actualB - expB);
+        const rawDeltaP = ELO_K * mm * (actualP - expP);
 
         for (const name of brancosNames) {
             const before = getElo(name);
@@ -1206,9 +1399,10 @@ export async function fetchGameTeamsWithElo(gameId: number): Promise<GameTeamsIn
         const bWon = g.brancos_score > g.pretos_score;
         const actB = isDraw ? 0.5 : (bWon ? 1 : 0);
         const actP = 1 - actB;
+        const mm = marginMultiplier(g.brancos_score - g.pretos_score);
 
-        for (const n of brancosNames) eloByName.set(n, getElo(n) + ELO_K * (actB - expB));
-        for (const n of pretosNames) eloByName.set(n, getElo(n) + ELO_K * (actP - expP));
+        for (const n of brancosNames) eloByName.set(n, getElo(n) + ELO_K * mm * (actB - expB));
+        for (const n of pretosNames) eloByName.set(n, getElo(n) + ELO_K * mm * (actP - expP));
     }
 
     const { brancosNames, pretosNames, captainB, captainP } = resolveGameTeams(game, resolveName);

@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation'
 type Props = {
     gameId: number
     playerNames: string[]
+    gameDetailUrl?: string | null
 }
 
-export default function VoteForm({ gameId, playerNames }: Props) {
+export default function VoteForm({ gameId, playerNames, gameDetailUrl }: Props) {
     const [voter, setVoter] = useState('')
     const [hasPaid, setHasPaid] = useState(false)
     const [bestPlayer, setBestPlayer] = useState('')
@@ -42,7 +43,11 @@ export default function VoteForm({ gameId, playerNames }: Props) {
             })
             if (result.success) {
                 setSubmitted(true)
-                router.refresh()
+                if (gameDetailUrl) {
+                    setTimeout(() => router.push(gameDetailUrl), 1500)
+                } else {
+                    router.refresh()
+                }
             } else {
                 setError(result.error ?? 'Erro ao submeter voto.')
             }
@@ -55,6 +60,9 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                 <div className="text-3xl">✅</div>
                 <h2 className="font-semibold">Voto submetido!</h2>
                 <p className="text-sm text-gray-500">Obrigado. Os resultados serão revelados quando a votação fechar.</p>
+                {gameDetailUrl && (
+                    <p className="text-xs text-gray-400">A redirecionar para o jogo...</p>
+                )}
             </div>
         )
     }

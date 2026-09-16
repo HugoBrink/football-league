@@ -2,7 +2,7 @@
 
 import { Archive, Globe, Home, List, Swords, Trophy, User, ChevronDown, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 type League = {
@@ -20,10 +20,22 @@ type NavLinksProps = {
 
 export default function NavLinks({ leagues }: NavLinksProps) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [seasonsOpen, setSeasonsOpen] = useState(false);
 
-    // Detect current league from URL
-    const currentLeagueSlug = leagues.find(l => pathname.startsWith(`/dashboard/${l.slug}`))?.slug;
+    // Detect current league from URL path or ?league= query param
+    const leagueFromPath = leagues.find(l => pathname.startsWith(`/dashboard/${l.slug}`))?.slug;
+    const leagueFromQuery = searchParams?.get('league') ?? undefined;
+    const detectedSlug = leagueFromPath ?? leagueFromQuery;
+
+    // Remember last known league so nav stays visible on pages without league context
+    const [lastLeagueSlug, setLastLeagueSlug] = useState<string | undefined>(detectedSlug ?? leagues[0]?.slug);
+
+    useEffect(() => {
+        if (detectedSlug) setLastLeagueSlug(detectedSlug);
+    }, [detectedSlug]);
+
+    const currentLeagueSlug = detectedSlug ?? lastLeagueSlug;
     const currentLeague = leagues.find(l => l.slug === currentLeagueSlug);
 
     const leagueNavItems = currentLeague ? [

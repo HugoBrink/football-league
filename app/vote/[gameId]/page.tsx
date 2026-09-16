@@ -1,4 +1,4 @@
-import { fetchGameByNumero, fetchGamePlayerNames, fetchGameTeamsWithElo, fetchVoteResults, fetchVoterNames, fetchVotingSession } from "@/app/lib/data";
+import { fetchGameByNumero, fetchGamePlayerNames, fetchGameTeamsWithElo, fetchVoteResults, fetchVoterNames, fetchVotingSession, getAllLeagues } from "@/app/lib/data";
 import { notFound } from "next/navigation";
 import VoteForm from "./VoteForm";
 
@@ -14,12 +14,16 @@ export default async function VotePage({ params }: { params: Promise<{ gameId: s
 
     const gameId = game.id as number;
 
-    const [session, playerNames, teamsWithElo, voters] = await Promise.all([
+    const [session, playerNames, teamsWithElo, voters, leagues] = await Promise.all([
         fetchVotingSession(gameId),
         fetchGamePlayerNames(gameId),
         fetchGameTeamsWithElo(gameId),
         fetchVoterNames(gameId),
+        getAllLeagues(),
     ]);
+
+    const league = leagues.find(l => l.id === game.league_id);
+    const gameDetailUrl = league ? `/dashboard/${league.slug}/games/${gameId}` : null;
 
     const isOpen = session?.is_open ?? false;
     const hasResult = game.brancos_score != null && game.pretos_score != null;
@@ -104,6 +108,7 @@ export default async function VotePage({ params }: { params: Promise<{ gameId: s
                     <VoteForm
                         gameId={gameId}
                         playerNames={playerNames}
+                        gameDetailUrl={gameDetailUrl}
                     />
                 ) : results ? (
                     <div className="bg-white rounded-lg border p-4 space-y-4">

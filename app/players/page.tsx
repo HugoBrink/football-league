@@ -1,6 +1,7 @@
 import { computeLongestLosingStreak, computeLongestUnbeatenStreak, computeSeasonStats, fetchCumulativeMVPStats, fetchTopPlayersByGoalsDiff, fetchTopPlayersByPoints, fetchTopPlayersByWins, getAllLeagues, getLeagueBySlug } from "../lib/data";
 import PlayerLink from "../components/PlayerLink";
 import SeasonSelect from "./SeasonSelect";
+import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
 
@@ -206,6 +207,77 @@ export default async function Players({ searchParams }: { searchParams: Promise<
                     </ol>
                 </div>
             </div>
+
+            {/* Game Records */}
+            {(seasonStats.mostUnbalancedGames.length > 0 || seasonStats.biggestUpsets.length > 0) && (
+                <>
+                    <h3 className="text-lg font-semibold mt-2">Recordes de Jogos</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {seasonStats.mostUnbalancedGames.length > 0 && (
+                            <div className="rounded-lg border p-4">
+                                <h3 className="font-semibold text-center">⚖️ Jogos Mais Desequilibrados</h3>
+                                <div className="mt-2 space-y-2">
+                                    {seasonStats.mostUnbalancedGames.slice(0, 5).map(g => (
+                                        <div key={g.gameId} className="flex items-center justify-between text-sm">
+                                            <div>
+                                                <Link href={`/dashboard/${league.slug}/games/${g.gameId}`} className="text-blue-600 hover:underline font-medium">
+                                                    #{g.gameNumero}
+                                                </Link>
+                                                <span className="text-gray-400 ml-1 text-xs">
+                                                    {new Date(g.date).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
+                                                </span>
+                                                <div className="text-xs text-gray-500">
+                                                    {g.captainBrancos && <span>©{g.captainBrancos}</span>}
+                                                    <span className="text-gray-400"> ({g.brancosAvg})</span>
+                                                    <span className="text-gray-400"> vs </span>
+                                                    {g.captainPretos && <span>©{g.captainPretos}</span>}
+                                                    <span className="text-gray-400"> ({g.pretosAvg})</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-bold">{g.brancosScore}-{g.pretosScore}</div>
+                                                <div className="text-xs text-red-500 font-medium">Δ{g.eloDiff}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {seasonStats.biggestUpsets.length > 0 && (
+                            <div className="rounded-lg border p-4">
+                                <h3 className="font-semibold text-center">🔥 Maiores Upsets</h3>
+                                <p className="text-xs text-gray-400 text-center">Underdog ganhou</p>
+                                <div className="mt-2 space-y-2">
+                                    {seasonStats.biggestUpsets.slice(0, 5).map(g => (
+                                        <div key={g.gameId} className="flex items-center justify-between text-sm">
+                                            <div>
+                                                <Link href={`/dashboard/${league.slug}/games/${g.gameId}`} className="text-blue-600 hover:underline font-medium">
+                                                    #{g.gameNumero}
+                                                </Link>
+                                                <span className="text-gray-400 ml-1 text-xs">
+                                                    {new Date(g.date).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
+                                                </span>
+                                                <div className="text-xs text-gray-500">
+                                                    {g.captainBrancos && <span>©{g.captainBrancos}</span>}
+                                                    <span className="text-gray-400"> ({g.brancosAvg})</span>
+                                                    <span className="text-gray-400"> vs </span>
+                                                    {g.captainPretos && <span>©{g.captainPretos}</span>}
+                                                    <span className="text-gray-400"> ({g.pretosAvg})</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-bold">{g.brancosScore}-{g.pretosScore}</div>
+                                                <div className="text-xs text-orange-500 font-medium">Δ{g.eloDiff}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
 
             {/* MVP Voting Stats */}
             {(mvpStats.bestPlayer.length > 0 || mvpStats.disruptor.length > 0 || mvpStats.wall.length > 0 || mvpStats.bestGoal.length > 0) && (
