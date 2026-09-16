@@ -227,14 +227,14 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                             Favorito (1050) vs Underdog (950)
                         </summary>
                         <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
-                            <p>O favorito tem ~64% de chance de ganhar:</p>
+                            <p>O favorito tem ~76% de chance de ganhar:</p>
                             <FaqTable
                                 headers={['Cenário', 'Favorito', 'Underdog']}
                                 rows={[
-                                    ['Favorito ganha 3-1', '+12', '-12'],
-                                    ['Favorito ganha 5-0 (goleada)', '+17', '-17'],
-                                    ['Empate 2-2', '-5', '+5'],
-                                    ['Upset! Underdog ganha 2-1', '-21', '+21'],
+                                    ['Favorito ganha 3-1', '+8', '-8'],
+                                    ['Favorito ganha 5-0 (goleada)', '+11', '-11'],
+                                    ['Empate 2-2', '-8', '+8'],
+                                    ['Upset! Underdog ganha 2-1', '-24', '+24'],
                                 ]}
                             />
                         </div>
@@ -246,13 +246,13 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                             Grande favorito (1100) vs Grande underdog (900)
                         </summary>
                         <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
-                            <p>O favorito tem ~76% de chance de ganhar:</p>
+                            <p>O favorito tem ~91% de chance de ganhar:</p>
                             <FaqTable
                                 headers={['Cenário', 'Favorito', 'Underdog']}
                                 rows={[
-                                    ['Favorito ganha 2-1', '+8', '-8'],
-                                    ['Upset! Underdog ganha 2-1', '-24', '+24'],
-                                    ['Upset + Goleada! Underdog ganha 4-0', '-36', '+36'],
+                                    ['Favorito ganha 2-1', '+3', '-3'],
+                                    ['Upset! Underdog ganha 2-1', '-29', '+29'],
+                                    ['Upset + Goleada! Underdog ganha 4-0', '-44', '+44'],
                                 ]}
                             />
                         </div>
@@ -288,14 +288,15 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                                 headers={['Diferença Elo', 'Chance do favorito', 'Favorito ganha', 'Upset']}
                                 rows={[
                                     ['0', '50%', '+16', '+16'],
-                                    ['30', '54%', '+15', '+17'],
-                                    ['50', '57%', '+14', '+18'],
-                                    ['100', '64%', '+12', '+21'],
-                                    ['150', '70%', '+10', '+23'],
-                                    ['200', '76%', '+8', '+24'],
+                                    ['25', '57%', '+14', '+18'],
+                                    ['50', '64%', '+12', '+21'],
+                                    ['75', '70%', '+10', '+23'],
+                                    ['100', '76%', '+8', '+24'],
+                                    ['150', '85%', '+5', '+27'],
+                                    ['200', '91%', '+3', '+29'],
                                 ]}
                             />
-                            <p>Até ~50 pontos é praticamente justo. A partir de <strong>100+</strong> nota-se, e com <strong>200+</strong> é claramente desequilibrado.</p>
+                            <p>Até ~25 pontos é praticamente justo. A partir de <strong>50+</strong> nota-se, e com <strong>100+</strong> é claramente desequilibrado.</p>
                         </div>
                     </details>
 
@@ -316,7 +317,7 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                                     <div className="inline-flex flex-col items-center">
                                         <span className="px-2">1</span>
                                         <span className="border-t border-gray-500 px-2 whitespace-nowrap">
-                                            1 + 10<sup className="text-[9px]">(Elo<sub>adv</sub> − Elo<sub>eq</sub>) / 400</sup>
+                                            1 + 10<sup className="text-[9px]">(Elo<sub>adv</sub> − Elo<sub>eq</sub>) / 200</sup>
                                         </span>
                                     </div>
                                 </div>
@@ -337,7 +338,7 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                                 headers={['Parâmetro', 'Valor', 'O que faz']}
                                 rows={[
                                     ['K', '32', 'Controla a volatilidade — quantos pontos se trocam por jogo. Mais alto = mudanças maiores. (No xadrez de elite usam 16, para principiantes 40)'],
-                                    ['Escala', '400', 'Controla o peso da diferença de Elo. Com 400 pts de diferença, o favorito tem ~91% de chance'],
+                                    ['Escala', '200', 'Controla o peso da diferença de Elo. Com 200 pts de diferença, o favorito tem ~91% de chance'],
                                     ['Elo inicial', '1000', 'O ponto de partida para todos. Arbitrário (no xadrez usam 1500)'],
                                     ['Multiplicador', '1.0 – 1.75x', 'Amplifica o K em goleadas (3+ golos). Não é Elo original — inspirado no FiveThirtyEight'],
                                 ]}
@@ -346,11 +347,11 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                             <p className="font-semibold text-gray-700 mt-2">Exemplo passo a passo:</p>
                             <div className="bg-gray-100 rounded p-2 text-[11px] space-y-0.5">
                                 <p>Equipa A (Elo 1050) vs Equipa B (Elo 950). A ganha 4-1.</p>
-                                <p>1. Resultado esperado de A = 1 / (1 + 10^((950-1050)/400)) = <strong>0.64</strong> (64%)</p>
+                                <p>1. Resultado esperado de A = 1 / (1 + 10^((950-1050)/200)) = <strong>0.76</strong> (76%)</p>
                                 <p>2. Resultado real de A = <strong>1</strong> (vitória)</p>
                                 <p>3. Multiplicador = <strong>1.25</strong> (3 golos de diferença)</p>
-                                <p>4. Δ Elo = 32 × 1.25 × (1 − 0.64) = <strong>+14</strong></p>
-                                <p>→ A sobe para 1064, B desce para 936.</p>
+                                <p>4. Δ Elo = 32 × 1.25 × (1 − 0.76) = <strong>+10</strong></p>
+                                <p>→ A sobe para 1060, B desce para 940.</p>
                             </div>
                         </div>
                     </details>
@@ -366,7 +367,7 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
 export default function EloTable({ ratings, seasons, currentSeason, leagueSlug }: Props) {
     const [expanded, setExpanded] = useState<string | null>(null)
     const [sortBy, setSortBy] = useState<SortField>('elo')
-    const [minGames, setMinGames] = useState(5)
+    const [minGames, setMinGames] = useState(10)
     const [isPending, startTransition] = useTransition()
 
     const router = useRouter()

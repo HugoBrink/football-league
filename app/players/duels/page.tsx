@@ -58,10 +58,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
                     As melhores e piores duplas da season, e contra quem cada jogador joga melhor (ou pior).
                 </p>
                 <PartnershipsRivalries
-                    bestPartnerships={partnerships.bestPartnerships}
-                    worstPartnerships={partnerships.worstPartnerships}
-                    favoriteRivals={partnerships.favoriteRivals}
-                    nemeses={partnerships.nemeses}
+                    allPairs={partnerships.allPairs}
+                    allVsStats={partnerships.allVsStats}
+                    playerNames={partnerships.playerNames}
                 />
             </div>
 

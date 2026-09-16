@@ -630,7 +630,7 @@ export async function computeSeasonStats(season: number, leagueId: number) {
         // Update elos for next game
         const expB = expectedScore(avgB, avgP);
         const actB = game.brancos_score === game.pretos_score ? 0.5 : (game.brancos_score > game.pretos_score ? 1 : 0);
-        const mm = marginMultiplier(game.brancos_score! - game.pretos_score!);
+        const mm = marginMultiplier(game.brancos_score! - game.pretos_score!, new Date(game.date));
         const deltaB = ELO_K * mm * (actB - expB);
         const deltaP = ELO_K * mm * ((1 - actB) - (1 - expB));
         for (const n of brancosNames) eloForStats.set(n, getEloStat(n) + deltaB);
@@ -659,12 +659,16 @@ const ELO_INITIAL = 1000;
 const ELO_K = 32;
 
 function expectedScore(ratingA: number, ratingB: number): number {
-    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 200));
 }
 
 // Margin of victory multiplier — goleadas (3+ goal diff) have more Elo impact
 // GD 0-2: 1.0x (normal), GD 3: 1.25x, GD 4: 1.5x, GD 5+: 1.75x (max)
-function marginMultiplier(goalDiff: number): number {
+// Only applies to games from 16 Sep 2026 onwards
+const MARGIN_MULTIPLIER_START = new Date('2026-09-16');
+
+function marginMultiplier(goalDiff: number, gameDate?: Date): number {
+    if (gameDate && gameDate < MARGIN_MULTIPLIER_START) return 1.0;
     const gd = Math.abs(goalDiff);
     if (gd < 3) return 1.0;
     return Math.min(1.75, 1.0 + (gd - 2) * 0.25);
@@ -761,7 +765,7 @@ export async function computeEloRatings(leagueId: number, season?: number) {
         const brancosWon = game.brancos_score > game.pretos_score;
         const actualB = isDraw ? 0.5 : (brancosWon ? 1 : 0);
         const actualP = 1 - actualB;
-        const mm = marginMultiplier(game.brancos_score - game.pretos_score);
+        const mm = marginMultiplier(game.brancos_score - game.pretos_score, new Date(game.date));
 
         for (const name of brancosNames) {
             const entry = getElo(name);
@@ -862,7 +866,7 @@ export async function computePlayerEloHistory(playerName: string, leagueId: numb
         const brancosWon = game.brancos_score > game.pretos_score;
         const actualB = isDraw ? 0.5 : (brancosWon ? 1 : 0);
         const actualP = 1 - actualB;
-        const mm = marginMultiplier(game.brancos_score - game.pretos_score);
+        const mm = marginMultiplier(game.brancos_score - game.pretos_score, new Date(game.date));
 
         const rawDeltaB = ELO_K * mm * (actualB - expB);
         const rawDeltaP = ELO_K * mm * (actualP - expP);
@@ -974,7 +978,7 @@ export async function computeEloSnapshotForGame(leagueId: number, gameId: number
         const brancosSnapshots: PlayerEloSnapshot[] = [];
         const pretosSnapshots: PlayerEloSnapshot[] = [];
 
-        const mm = marginMultiplier(game.brancos_score - game.pretos_score);
+        const mm = marginMultiplier(game.brancos_score - game.pretos_score, new Date(game.date));
         const rawDeltaB = ELO_K * mm * (actualB - expB);
         const rawDeltaP = ELO_K * mm * (actualP - expP);
 
@@ -1158,68 +1162,30 @@ export async function computePartnershipsAndRivalries(season: number, leagueId: 
         }
     }
 
-    const MIN_TOGETHER = 3;
-    const MIN_AGAINST = 3;
+    const allPairs = [...pairs.values()].map(p => ({
+        playerA: p.a,
+        playerB: p.b,
+        togetherGames: p.togetherGames,
+        togetherWins: p.togetherWins,
+        togetherWinRate: p.togetherGames > 0 ? p.togetherWins / p.togetherGames : 0,
+        againstGames: p.againstGames,
+        winsA: p.winsA,
+        winsB: p.winsB,
+    }));
 
-    // Best & worst partnerships (together)
-    const allPairs = [...pairs.values()];
-    const togetherPairs: PairStats[] = allPairs
-        .filter(p => p.togetherGames >= MIN_TOGETHER)
-        .map(p => ({
-            playerA: p.a,
-            playerB: p.b,
-            togetherGames: p.togetherGames,
-            togetherWins: p.togetherWins,
-            togetherWinRate: p.togetherWins / p.togetherGames,
-            againstGames: p.againstGames,
-            winsA: p.winsA,
-            winsB: p.winsB,
-        }));
-
-    const bestPartnerships = [...togetherPairs].sort((a, b) => b.togetherWinRate - a.togetherWinRate || b.togetherWins - a.togetherWins);
-    const worstPartnerships = [...togetherPairs].sort((a, b) => a.togetherWinRate - b.togetherWinRate || a.togetherWins - b.togetherWins);
-
-    // Rivalries: per player, who they beat most / lose to most
     const playerNames = [...nameById.values()];
-    const favoriteRivals: RivalryEntry[] = [];
-    const nemeses: RivalryEntry[] = [];
-
+    const allVsStats: { player: string; opponent: string; games: number; wins: number; winRate: number }[] = [];
     for (const player of playerNames) {
-        let bestWinRate = -1;
-        let bestRival: RivalryEntry | null = null;
-        let worstWinRate = 2;
-        let worstNemesis: RivalryEntry | null = null;
-
         for (const opponent of playerNames) {
             if (player === opponent) continue;
             const key = vsKey(player, opponent);
             const vs = vsStats.get(key);
-            if (!vs || vs.games < MIN_AGAINST) continue;
-
-            const wr = vs.wins / vs.games;
-            if (wr > bestWinRate || (wr === bestWinRate && vs.games > (bestRival?.games ?? 0))) {
-                bestWinRate = wr;
-                bestRival = { player, opponent, games: vs.games, wins: vs.wins, winRate: wr };
-            }
-            if (wr < worstWinRate || (wr === worstWinRate && vs.games > (worstNemesis?.games ?? 0))) {
-                worstWinRate = wr;
-                worstNemesis = { player, opponent, games: vs.games, wins: vs.wins, winRate: wr };
-            }
+            if (!vs || vs.games === 0) continue;
+            allVsStats.push({ player, opponent, games: vs.games, wins: vs.wins, winRate: vs.wins / vs.games });
         }
-
-        if (bestRival) favoriteRivals.push(bestRival);
-        if (worstNemesis) nemeses.push(worstNemesis);
     }
 
-    favoriteRivals.sort((a, b) => b.winRate - a.winRate || b.games - a.games);
-    nemeses.sort((a, b) => a.winRate - b.winRate || b.games - a.games);
-
-    return {
-        bestPartnerships: bestPartnerships.slice(0, 10),
-        worstPartnerships: worstPartnerships.slice(0, 10),
-        favoriteRivals: favoriteRivals.slice(0, 10),
-        nemeses: nemeses.slice(0, 10),
-    };
+    return { allPairs, allVsStats, playerNames };
 }
 
 // ---------------------------------------------------------------------------
@@ -1399,7 +1365,7 @@ export async function fetchGameTeamsWithElo(gameId: number): Promise<GameTeamsIn
         const bWon = g.brancos_score > g.pretos_score;
         const actB = isDraw ? 0.5 : (bWon ? 1 : 0);
         const actP = 1 - actB;
-        const mm = marginMultiplier(g.brancos_score - g.pretos_score);
+        const mm = marginMultiplier(g.brancos_score - g.pretos_score, new Date(g.date));
 
         for (const n of brancosNames) eloByName.set(n, getElo(n) + ELO_K * mm * (actB - expB));
         for (const n of pretosNames) eloByName.set(n, getElo(n) + ELO_K * mm * (actP - expP));
