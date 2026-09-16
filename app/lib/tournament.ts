@@ -122,6 +122,97 @@ export async function createInitialBracket(playerIds: string[], season: number, 
     await prisma.tournament_mocamfe.createMany({ data: matches });
 }
 
+export type CupMatchPreview = {
+    matchId: number;
+    round: number;
+    player1Id: string;
+    player1Name: string;
+    player1Team: 'brancos' | 'pretos';
+    player2Id: string;
+    player2Name: string;
+    player2Team: 'brancos' | 'pretos';
+};
+
+export async function detectCupMatchesForGame(
+    brancosPlayerIds: string[],
+    pretosPlayerIds: string[],
+    season: number,
+    leagueId: number,
+    gameDate?: Date,
+    gameId?: number,
+): Promise<CupMatchPreview[]> {
+    const brancosSet = new Set(brancosPlayerIds);
+    const pretosSet = new Set(pretosPlayerIds);
+    const allIds = [...brancosPlayerIds, ...pretosPlayerIds];
+
+    if (allIds.length === 0) return [];
+
+    // Check if the tournament existed at the time of the game
+    if (gameDate) {
+        const firstR1 = await prisma.tournament_mocamfe.findFirst({
+            where: { season, league_id: leagueId, round: 1 },
+            orderBy: { created_at: 'asc' },
+            select: { created_at: true },
+        });
+        if (!firstR1 || gameDate < firstR1.created_at) return [];
+    }
+
+    const matches = await prisma.tournament_mocamfe.findMany({
+        where: {
+            season,
+            league_id: leagueId,
+            opponent_id: { not: null },
+            OR: [
+                // Pending matches where opponents are in this game
+                {
+                    winner_id: null,
+                    AND: [
+                        { player_id: { in: allIds.map(BigInt) } },
+                        { opponent_id: { in: allIds.map(BigInt) } },
+                    ]
+                },
+                // Already decided matches that were decided by THIS game
+                ...(gameId ? [{ game_id: gameId }] : []),
+            ]
+        }
+    });
+
+    const players = await prisma.players.findMany({
+        where: { league_id: leagueId },
+        select: { id: true, name: true },
+    });
+    const nameById = new Map(players.map(p => [String(p.id), p.name]));
+
+    const result: CupMatchPreview[] = [];
+
+    for (const match of matches) {
+        const pid = String(match.player_id);
+        const oid = match.opponent_id ? String(match.opponent_id) : null;
+        if (!oid) continue;
+
+        const pInBrancos = brancosSet.has(pid);
+        const pInPretos = pretosSet.has(pid);
+        const oInBrancos = brancosSet.has(oid);
+        const oInPretos = pretosSet.has(oid);
+
+        // They must be on opposing teams
+        if ((pInBrancos && oInPretos) || (pInPretos && oInBrancos)) {
+            result.push({
+                matchId: match.id,
+                round: match.round,
+                player1Id: pid,
+                player1Name: nameById.get(pid) ?? '?',
+                player1Team: pInBrancos ? 'brancos' : 'pretos',
+                player2Id: oid,
+                player2Name: nameById.get(oid) ?? '?',
+                player2Team: oInBrancos ? 'brancos' : 'pretos',
+            });
+        }
+    }
+
+    return result;
+}
+
 export async function updateMatchFromGame(gameId: number, season: number, leagueId: number) {
     const game = await prisma.games.findUnique({ where: { id: gameId } });
     if (!game) return null;

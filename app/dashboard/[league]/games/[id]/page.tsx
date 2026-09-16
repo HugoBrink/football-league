@@ -6,6 +6,7 @@ import GameVoteResults from "@/app/components/GameVoteResults";
 import GameComments from "@/app/components/GameComments";
 import AddResultForm from "@/app/components/AddResultForm";
 import AdminPaymentToggle from "@/app/components/AdminPaymentToggle";
+import { detectCupMatchesForGame, getRoundName, calculateTotalRounds, fetchTournamentMatches } from "@/app/lib/tournament";
 import { Game } from "@/app/lib/definitions";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -23,7 +24,16 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
     const hasResult = game.brancos_score != null && game.pretos_score != null;
     const gameId = game.id as number;
 
-    const [eloSnapshot, teamsWithElo, session, voters, paidPlayers, playerNames, comments] = await Promise.all([
+    const brancosIds = [
+        ...(game.brancos_players as any[]).map(String),
+        ...(game.brancos_captain ? [String(game.brancos_captain)] : []),
+    ];
+    const pretosIds = [
+        ...(game.pretos_players as any[]).map(String),
+        ...(game.pretos_captain ? [String(game.pretos_captain)] : []),
+    ];
+
+    const [eloSnapshot, teamsWithElo, session, voters, paidPlayers, playerNames, comments, cupMatches, allTournamentMatches] = await Promise.all([
         hasResult ? computeEloSnapshotForGame(league.id, gameId) : null,
         fetchGameTeamsWithElo(gameId),
         auth(),
@@ -31,6 +41,8 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
         fetchPaidPlayers(gameId),
         fetchGamePlayerNames(gameId),
         fetchGameComments(gameId),
+        detectCupMatchesForGame(brancosIds, pretosIds, league.current_season, league.id, new Date(game.date), gameId),
+        fetchTournamentMatches(league.current_season, league.id),
     ]);
 
     const voterSet = new Set(voters);
@@ -105,6 +117,38 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
             {hasResult && eloSnapshot && (
                 <div className="w-full mt-2">
                     <GameEloBreakdown snapshot={eloSnapshot} voterSet={voterSet} paidSet={paidSet} />
+                </div>
+            )}
+
+            {/* Cup matches detected */}
+            {cupMatches.length > 0 && (
+                <div className="w-full max-w-2xl mx-auto mt-3">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-2">
+                        <h4 className="text-sm font-semibold text-yellow-800 flex items-center gap-1.5">
+                            🏆 {!hasResult ? 'Jogos da Taça neste jogo' : 'Jogos da Taça decididos'}
+                        </h4>
+                        {cupMatches.map(cm => {
+                            const totalRounds = calculateTotalRounds(allTournamentMatches.filter(m => m.round === 1).length * 2);
+                            const roundName = getRoundName(cm.round, totalRounds);
+                            return (
+                                <div key={cm.matchId} className="flex items-center gap-2 text-sm">
+                                    <span className="text-xs font-medium text-yellow-600 bg-yellow-100 rounded px-1.5 py-0.5">
+                                        {roundName}
+                                    </span>
+                                    <span className={cm.player1Team === 'brancos' ? 'text-gray-600' : 'text-gray-900 font-medium'}>
+                                        {cm.player1Name}
+                                    </span>
+                                    <span className="text-yellow-500 font-bold text-xs">vs</span>
+                                    <span className={cm.player2Team === 'brancos' ? 'text-gray-600' : 'text-gray-900 font-medium'}>
+                                        {cm.player2Name}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        {!hasResult && (
+                            <p className="text-xs text-yellow-600">O resultado deste jogo decide automaticamente estes confrontos da taça.</p>
+                        )}
+                    </div>
                 </div>
             )}
 
