@@ -90,9 +90,9 @@ model game_votes {
   id          Int      @id @default(autoincrement())
   game_id     Int
   voter_name  String   // who voted (for dedup, not shown in results)
-  best_player String   // "Melhor em Campo"
-  disruptor   String   // "Maior Desequilibrador"
-  wall        String   // "Maior Muralha"
+  best_player String?  // "Melhor em Campo" (optional)
+  disruptor   String?  // "Maior Desequilibrador" (optional)
+  wall        String?  // "Maior Muralha" (optional)
   best_goal   String?  // "Melhor Golo" (optional)
   has_paid    Boolean  @default(false) // paid 5.90€
   created_at  DateTime @default(now())

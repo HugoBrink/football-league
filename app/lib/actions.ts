@@ -452,25 +452,26 @@ export async function authenticate(
 const voteSchema = z.object({
     gameId: z.number(),
     voterName: z.string().min(1),
-    bestPlayer: z.string().min(1),
-    disruptor: z.string().min(1),
-    wall: z.string().min(1),
+    bestPlayer: z.string().nullable(),
+    disruptor: z.string().nullable(),
+    wall: z.string().nullable(),
     bestGoal: z.string().nullable(),
+    hasPaid: z.boolean().optional(),
 });
 
 export async function submitVote(data: {
     gameId: number;
     voterName: string;
-    bestPlayer: string;
-    disruptor: string;
-    wall: string;
+    bestPlayer: string | null;
+    disruptor: string | null;
+    wall: string | null;
     bestGoal: string | null;
     hasPaid?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
     const parsed = voteSchema.safeParse(data);
     if (!parsed.success) return { success: false, error: 'Dados inválidos.' };
 
-    const { gameId, voterName, bestPlayer, disruptor, wall, bestGoal } = parsed.data;
+    const { gameId, voterName, bestPlayer, disruptor, wall, bestGoal, hasPaid } = parsed.data;
 
     // Check voting session is open
     const session = await prisma.voting_sessions.findUnique({ where: { game_id: gameId } });
@@ -483,12 +484,13 @@ export async function submitVote(data: {
     if (existing) return { success: false, error: 'Já votaste neste jogo.' };
 
     // Verify voter can't vote for themselves
-    if (voterName === bestPlayer || voterName === disruptor || voterName === wall || voterName === bestGoal) {
+    const selfVote = [bestPlayer, disruptor, wall, bestGoal].some(v => v && v === voterName);
+    if (selfVote) {
         return { success: false, error: 'Não podes votar em ti próprio.' };
     }
 
     await prisma.game_votes.create({
-        data: { game_id: gameId, voter_name: voterName, best_player: bestPlayer, disruptor, wall, best_goal: bestGoal, has_paid: data.hasPaid ?? false },
+        data: { game_id: gameId, voter_name: voterName, best_player: bestPlayer, disruptor, wall, best_goal: bestGoal, has_paid: hasPaid ?? false },
     });
 
     return { success: true };

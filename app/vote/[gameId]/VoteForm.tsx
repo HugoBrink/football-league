@@ -22,11 +22,11 @@ export default function VoteForm({ gameId, playerNames }: Props) {
     const router = useRouter()
 
     const otherPlayers = playerNames.filter(n => n !== voter)
-    const canSubmit = voter && hasPaid && bestPlayer && disruptor && wall
+    const canSubmit = voter && hasPaid
 
     const handleSubmit = () => {
-        if (!canSubmit) {
-            setError('Preenche todos os campos obrigatórios e confirma o pagamento.')
+        if (!voter || !hasPaid) {
+            setError('Seleciona o teu nome e confirma o pagamento.')
             return
         }
         setError(null)
@@ -34,9 +34,9 @@ export default function VoteForm({ gameId, playerNames }: Props) {
             const result = await submitVote({
                 gameId,
                 voterName: voter,
-                bestPlayer,
-                disruptor,
-                wall,
+                bestPlayer: bestPlayer || null,
+                disruptor: disruptor || null,
+                wall: wall || null,
                 bestGoal: bestGoal || null,
                 hasPaid,
             })
@@ -92,21 +92,19 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                 </select>
             </div>
 
-            {/* Payment confirmation — always visible after voter select */}
-            {voter && (
-                <label className="flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:bg-green-50 hover:border-green-200 transition-colors">
-                    <input
-                        type="checkbox"
-                        checked={hasPaid}
-                        onChange={e => setHasPaid(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                    />
-                    <div>
-                        <span className="text-sm font-medium">💰 Já paguei (5,90€)</span>
-                        <p className="text-xs text-gray-400">Confirma que fizeste o pagamento para este jogo</p>
-                    </div>
-                </label>
-            )}
+            {/* Payment confirmation — always visible */}
+            <label className={`flex items-center gap-3 px-3 py-3 rounded-lg border cursor-pointer transition-colors ${hasPaid ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50 hover:bg-green-50 hover:border-green-200'}`}>
+                <input
+                    type="checkbox"
+                    checked={hasPaid}
+                    onChange={e => setHasPaid(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                />
+                <div>
+                    <span className="text-sm font-medium">{hasPaid ? '✅' : '💰'} Já paguei (5,90€)</span>
+                    <p className="text-xs text-gray-400">Confirma que fizeste o pagamento para este jogo</p>
+                </div>
+            </label>
 
             {/* Vote categories — appear after voter selected, below payment */}
             {voter && (
@@ -114,7 +112,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                     {/* Best Player */}
                     <div>
                         <label className="block text-sm font-medium mb-1" htmlFor="bestPlayer">
-                            ⭐ Melhor em Campo
+                            ⭐ Melhor em Campo <span className="text-gray-400 font-normal">(opcional)</span>
                         </label>
                         <select
                             id="bestPlayer"
@@ -122,7 +120,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                             value={bestPlayer}
                             onChange={e => setBestPlayer(e.target.value)}
                         >
-                            <option value="" disabled>Seleciona…</option>
+                            <option value="">Nenhum</option>
                             {otherPlayers.map(n => (
                                 <option key={n} value={n}>{n}</option>
                             ))}
@@ -132,7 +130,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                     {/* Disruptor */}
                     <div>
                         <label className="block text-sm font-medium mb-1" htmlFor="disruptor">
-                            ⚡ Maior Desequilibrador
+                            ⚡ Maior Desequilibrador <span className="text-gray-400 font-normal">(opcional)</span>
                         </label>
                         <select
                             id="disruptor"
@@ -140,7 +138,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                             value={disruptor}
                             onChange={e => setDisruptor(e.target.value)}
                         >
-                            <option value="" disabled>Seleciona…</option>
+                            <option value="">Nenhum</option>
                             {otherPlayers.map(n => (
                                 <option key={n} value={n}>{n}</option>
                             ))}
@@ -150,7 +148,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                     {/* Wall */}
                     <div>
                         <label className="block text-sm font-medium mb-1" htmlFor="wall">
-                            🧱 Maior Muralha
+                            🧱 Maior Muralha <span className="text-gray-400 font-normal">(opcional)</span>
                         </label>
                         <select
                             id="wall"
@@ -158,14 +156,14 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                             value={wall}
                             onChange={e => setWall(e.target.value)}
                         >
-                            <option value="" disabled>Seleciona…</option>
+                            <option value="">Nenhum</option>
                             {otherPlayers.map(n => (
                                 <option key={n} value={n}>{n}</option>
                             ))}
                         </select>
                     </div>
 
-                    {/* Best Goal (optional) */}
+                    {/* Best Goal */}
                     <div>
                         <label className="block text-sm font-medium mb-1" htmlFor="bestGoal">
                             ⚽ Melhor Golo <span className="text-gray-400 font-normal">(opcional)</span>
@@ -189,7 +187,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                         disabled={isPending || !canSubmit}
                         className="w-full bg-blue-600 text-white rounded-lg py-3 text-sm font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
-                        {isPending ? 'A submeter…' : !hasPaid ? '💰 Confirma o pagamento para votar' : 'Submeter Voto'}
+                        {isPending ? 'A submeter…' : !voter ? 'Seleciona o teu nome' : !hasPaid ? '💰 Confirma o pagamento para votar' : 'Submeter Voto'}
                     </button>
                 </>
             )}
