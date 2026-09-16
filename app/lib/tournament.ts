@@ -197,8 +197,21 @@ export async function computeCupNotifications(season: number, leagueId: number) 
         return { forcedCaptainPairs: [] as any[], absenceWarnings: [] as any[] };
     }
 
+    // Find when the tournament was created (earliest round 1 match)
+    const firstR1 = await prisma.tournament_mocamfe.findFirst({
+        where: { season, league_id: leagueId, round: 1 },
+        orderBy: { created_at: 'asc' },
+        select: { created_at: true },
+    });
+    const tournamentStart = firstR1?.created_at;
+
+    // Only count games that happened after the tournament was created
     const games = await prisma.games.findMany({
-        where: { season, league_id: leagueId },
+        where: {
+            season,
+            league_id: leagueId,
+            ...(tournamentStart ? { date: { gte: tournamentStart } } : {}),
+        },
         orderBy: { date: 'asc' }
     });
 

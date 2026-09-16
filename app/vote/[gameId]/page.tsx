@@ -1,7 +1,6 @@
-import { fetchGameByNumero, fetchGamePlayerNames, fetchGameTeamsWithElo, fetchVoteResults, fetchVoterNames, fetchPaidPlayers, fetchVotingSession } from "@/app/lib/data";
+import { fetchGameByNumero, fetchGamePlayerNames, fetchGameTeamsWithElo, fetchVoteResults, fetchVoterNames, fetchVotingSession } from "@/app/lib/data";
 import { notFound } from "next/navigation";
 import VoteForm from "./VoteForm";
-import PaymentButton from "./PaymentButton";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,18 +14,16 @@ export default async function VotePage({ params }: { params: Promise<{ gameId: s
 
     const gameId = game.id as number;
 
-    const [session, playerNames, teamsWithElo, voters, paidPlayers] = await Promise.all([
+    const [session, playerNames, teamsWithElo, voters] = await Promise.all([
         fetchVotingSession(gameId),
         fetchGamePlayerNames(gameId),
         fetchGameTeamsWithElo(gameId),
         fetchVoterNames(gameId),
-        fetchPaidPlayers(gameId),
     ]);
 
     const isOpen = session?.is_open ?? false;
     const hasResult = game.brancos_score != null && game.pretos_score != null;
     const voterSet = new Set(voters);
-    const paidSet = new Set(paidPlayers);
 
     let results = null;
     if (!isOpen && session) {
@@ -84,7 +81,6 @@ export default async function VotePage({ params }: { params: Promise<{ gameId: s
                                                 </span>
                                                 <span className="text-gray-400 tabular-nums">{p.elo}</span>
                                                 {voterSet.has(p.name) && <span title="Votou" className="ml-0.5">🗳️</span>}
-                                                {paidSet.has(p.name) && <span title="Pagou" className="ml-0.5">💰</span>}
                                             </div>
                                         ))}
                                     </div>
@@ -98,25 +94,6 @@ export default async function VotePage({ params }: { params: Promise<{ gameId: s
                         })()}
                     </div>
                 )}
-
-                {/* Payment Section — always visible, above voting */}
-                <div className="bg-white rounded-lg border p-4 space-y-2">
-                    <h2 className="font-semibold text-center text-sm">💰 Pagamento (5,90€)</h2>
-                    <p className="text-xs text-gray-400 text-center">Clica no teu nome para marcar como pago</p>
-                    <div className="space-y-1.5">
-                        {playerNames.map(name => (
-                            <PaymentButton
-                                key={name}
-                                gameId={gameId}
-                                playerName={name}
-                                isPaid={paidSet.has(name)}
-                            />
-                        ))}
-                    </div>
-                    <p className="text-xs text-gray-400 text-center">
-                        {paidPlayers.length}/{playerNames.length} pagos
-                    </p>
-                </div>
 
                 {/* Voting Section */}
                 {!session ? (
