@@ -41,36 +41,81 @@ export async function createInitialBracket(playerIds: string[], season: number, 
     await clearTournament(season, leagueId);
 
     const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+    const n = shuffled.length;
+    const totalSlots = Math.pow(2, Math.ceil(Math.log2(n)));
+    const byeCount = totalSlots - n;
 
-    const matches = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
+    // Players who get a BYE go directly to round 2
+    // BYEs go to the last positions in round 1 (top-seeded skip)
+    const byePlayers = shuffled.slice(0, byeCount);
+    const r1Players = shuffled.slice(byeCount);
+
+    const matches: {
+        season: number;
+        league_id: number;
+        round: number;
+        position: number;
+        player_id: bigint;
+        opponent_id: bigint | null;
+        winner_id: bigint | null;
+        game_id: number | null;
+        walkover: boolean;
+        walkover_reason: string | null;
+    }[] = [];
+
+    // Round 1 actual matches (the first positions)
+    const actualR1Matches = r1Players.length / 2;
+    for (let i = 0; i < r1Players.length; i += 2) {
         const position = Math.floor(i / 2) + 1;
-        const player1 = shuffled[i];
-        const player2 = i + 1 < shuffled.length ? shuffled[i + 1] : null;
-
         matches.push({
             season,
             league_id: leagueId,
             round: 1,
             position,
-            player_id: BigInt(player1),
-            opponent_id: player2 ? BigInt(player2) : null,
+            player_id: BigInt(r1Players[i]),
+            opponent_id: BigInt(r1Players[i + 1]),
             winner_id: null,
-            game_id: null
+            game_id: null,
+            walkover: false,
+            walkover_reason: null,
+        });
+    }
+
+    // Round 1 BYE matches (positions after actual matches)
+    // These are auto-won — the BYE player advances immediately
+    for (let i = 0; i < byeCount; i++) {
+        const position = actualR1Matches + i + 1;
+        matches.push({
+            season,
+            league_id: leagueId,
+            round: 1,
+            position,
+            player_id: BigInt(byePlayers[i]),
+            opponent_id: null,
+            winner_id: BigInt(byePlayers[i]),
+            game_id: null,
+            walkover: true,
+            walkover_reason: 'BYE',
         });
 
-        if (i + 1 >= shuffled.length && player1) {
-            const nextRoundPosition = Math.ceil(position / 2);
+        // Also create the round 2 slot for this BYE player
+        const r2Position = Math.ceil(position / 2);
+        const existingR2 = matches.find(m => m.round === 2 && m.position === r2Position);
+        if (!existingR2) {
             matches.push({
                 season,
                 league_id: leagueId,
                 round: 2,
-                position: nextRoundPosition,
-                player_id: BigInt(player1),
+                position: r2Position,
+                player_id: BigInt(byePlayers[i]),
                 opponent_id: null,
                 winner_id: null,
-                game_id: null
+                game_id: null,
+                walkover: false,
+                walkover_reason: null,
             });
+        } else if (!existingR2.opponent_id) {
+            existingR2.opponent_id = BigInt(byePlayers[i]);
         }
     }
 

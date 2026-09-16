@@ -61,10 +61,10 @@ export default function TournamentBracket({ matches, players, onCreateBracket, i
         );
     }
 
-    // Calculate totalRounds from round-1 match count (not from max round in DB)
+    // Calculate totalRounds from round-1 match count (includes BYE slots)
     const r1Matches = matches.filter(m => m.round === 1);
-    const playerCount = r1Matches.length * 2;
-    const totalRounds = Math.max(Math.ceil(Math.log2(playerCount)), Math.max(...matches.map(m => m.round)));
+    const totalSlots = r1Matches.length * 2;
+    const totalRounds = Math.max(Math.ceil(Math.log2(totalSlots)), Math.max(...matches.map(m => m.round)));
 
     // Organize matches by round
     const roundMatches: (TournamentMatch | null)[][] = Array.from({ length: totalRounds }, () => []);
@@ -222,9 +222,25 @@ function MatchCard({ match, getPlayerName, isFinal, isAdmin }: {
     }
 
     const winner = match.winner_id;
+    const isBye = match.walkover && match.walkover_reason === 'BYE';
     const canForce = isAdmin && !winner && match.opponent_id;
     const p1Name = getPlayerName(match.player_id);
     const p2Name = match.opponent_id ? getPlayerName(match.opponent_id) : 'BYE';
+
+    if (isBye) {
+        return (
+            <div className="w-44 rounded-md overflow-hidden shadow-sm border border-gray-200 bg-gray-50/80" style={{ height: `${MATCH_H}px` }}>
+                <div className="flex items-center justify-between px-2 flex-1 h-1/2">
+                    <span className="text-xs font-medium text-gray-700">{p1Name}</span>
+                    <span className="text-[10px] text-green-600">→</span>
+                </div>
+                <div className="border-t border-gray-100" />
+                <div className="flex items-center px-2 flex-1 h-1/4">
+                    <span className="text-[10px] text-gray-300 italic">BYE — passa direto</span>
+                </div>
+            </div>
+        );
+    }
 
     const handleForce = (winnerId: bigint) => {
         const loserName = winnerId === match.player_id ? p2Name : p1Name;
@@ -353,6 +369,19 @@ function ListMatchCard({ match, getPlayerName, isAdmin }: { match: TournamentMat
     const [showActions, setShowActions] = useState(false);
     const [isPending, startTransition] = useTransition();
     const [reason, setReason] = useState('');
+
+    const isBye = match.walkover && match.walkover_reason === 'BYE';
+    if (isBye) {
+        return (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                <div className="px-3 py-1.5 bg-gray-100 border-b text-xs text-gray-400">BYE</div>
+                <div className="px-3 py-2.5 flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">{getPlayerName(match.player_id)}</span>
+                    <span className="text-xs text-green-600">Passa direto →</span>
+                </div>
+            </div>
+        );
+    }
 
     const winner = match.winner_id;
     const p1Name = getPlayerName(match.player_id);
