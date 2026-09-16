@@ -66,6 +66,7 @@ model tournament_mocamfe {
   game_id         Int?     // id do jogo onde se defrontaram (null se pendente)
   walkover        Boolean  @default(false)
   walkover_reason String?
+  created_at      DateTime @default(now())
 
   @@unique([season, league_id, round, position])
   @@index([player_id])

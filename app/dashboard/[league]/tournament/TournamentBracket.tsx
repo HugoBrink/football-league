@@ -37,6 +37,13 @@ export default function TournamentBracket({ matches, players, onCreateBracket, i
     };
 
     if (matches.length === 0) {
+        if (!isAdmin) {
+            return (
+                <div className="border rounded-lg p-6 bg-white text-center">
+                    <p className="text-gray-500">🏆 Torneio ainda não foi sorteado.</p>
+                </div>
+            );
+        }
         return (
             <div className="space-y-4">
                 <div className="border rounded-lg p-4 bg-white">

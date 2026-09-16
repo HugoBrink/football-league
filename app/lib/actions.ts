@@ -465,6 +465,7 @@ export async function submitVote(data: {
     disruptor: string;
     wall: string;
     bestGoal: string | null;
+    hasPaid?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
     const parsed = voteSchema.safeParse(data);
     if (!parsed.success) return { success: false, error: 'Dados inválidos.' };
@@ -487,7 +488,7 @@ export async function submitVote(data: {
     }
 
     await prisma.game_votes.create({
-        data: { game_id: gameId, voter_name: voterName, best_player: bestPlayer, disruptor, wall, best_goal: bestGoal, has_paid: false },
+        data: { game_id: gameId, voter_name: voterName, best_player: bestPlayer, disruptor, wall, best_goal: bestGoal, has_paid: data.hasPaid ?? false },
     });
 
     return { success: true };

@@ -11,6 +11,7 @@ type Props = {
 
 export default function VoteForm({ gameId, playerNames }: Props) {
     const [voter, setVoter] = useState('')
+    const [hasPaid, setHasPaid] = useState(false)
     const [bestPlayer, setBestPlayer] = useState('')
     const [disruptor, setDisruptor] = useState('')
     const [wall, setWall] = useState('')
@@ -21,10 +22,11 @@ export default function VoteForm({ gameId, playerNames }: Props) {
     const router = useRouter()
 
     const otherPlayers = playerNames.filter(n => n !== voter)
+    const canSubmit = voter && hasPaid && bestPlayer && disruptor && wall
 
     const handleSubmit = () => {
-        if (!voter || !bestPlayer || !disruptor || !wall) {
-            setError('Preenche todos os campos obrigatórios.')
+        if (!canSubmit) {
+            setError('Preenche todos os campos obrigatórios e confirma o pagamento.')
             return
         }
         setError(null)
@@ -36,6 +38,7 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                 disruptor,
                 wall,
                 bestGoal: bestGoal || null,
+                hasPaid,
             })
             if (result.success) {
                 setSubmitted(true)
@@ -89,6 +92,23 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                 </select>
             </div>
 
+            {/* Payment confirmation — always visible after voter select */}
+            {voter && (
+                <label className="flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:bg-green-50 hover:border-green-200 transition-colors">
+                    <input
+                        type="checkbox"
+                        checked={hasPaid}
+                        onChange={e => setHasPaid(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <div>
+                        <span className="text-sm font-medium">💰 Já paguei (5,90€)</span>
+                        <p className="text-xs text-gray-400">Confirma que fizeste o pagamento para este jogo</p>
+                    </div>
+                </label>
+            )}
+
+            {/* Vote categories — appear after voter selected, below payment */}
             {voter && (
                 <>
                     {/* Best Player */}
@@ -163,12 +183,13 @@ export default function VoteForm({ gameId, playerNames }: Props) {
                         </select>
                     </div>
 
+                    {/* Submit button — disabled until name selected + paid confirmed */}
                     <button
                         onClick={handleSubmit}
-                        disabled={isPending || !bestPlayer || !disruptor || !wall}
+                        disabled={isPending || !canSubmit}
                         className="w-full bg-blue-600 text-white rounded-lg py-3 text-sm font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
-                        {isPending ? 'A submeter…' : 'Submeter Voto'}
+                        {isPending ? 'A submeter…' : !hasPaid ? '💰 Confirma o pagamento para votar' : 'Submeter Voto'}
                     </button>
                 </>
             )}
