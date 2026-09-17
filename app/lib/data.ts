@@ -662,16 +662,17 @@ function expectedScore(ratingA: number, ratingB: number): number {
     return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 200));
 }
 
-// Margin of victory multiplier — goleadas (3+ goal diff) have more Elo impact
-// GD 0-2: 1.0x (normal), GD 3: 1.25x, GD 4: 1.5x, GD 5+: 1.75x (max)
-// Only applies to games from 16 Sep 2026 onwards
-const MARGIN_MULTIPLIER_START = new Date('2026-09-16');
+// Margin of victory multiplier — goleadas have more Elo impact
+// GD 0-2: 1.0x | GD 3-5: 1.25x | GD 6+: 1.5x
+// Only applies to games from 17 Sep 2026 onwards
+const MARGIN_MULTIPLIER_START = new Date('2026-09-17');
 
 function marginMultiplier(goalDiff: number, gameDate?: Date): number {
     if (gameDate && gameDate < MARGIN_MULTIPLIER_START) return 1.0;
     const gd = Math.abs(goalDiff);
     if (gd < 3) return 1.0;
-    return Math.min(1.75, 1.0 + (gd - 2) * 0.25);
+    if (gd <= 5) return 1.25;
+    return 1.5;
 }
 
 type EloHistoryPoint = { gameNum: number; elo: number; date: Date };

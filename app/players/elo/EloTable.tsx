@@ -211,10 +211,11 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                         <div className="px-3 pb-3 text-gray-600 text-xs space-y-1">
                             <p>Quando as equipas têm Elo igual, ambas têm 50% de probabilidade de ganhar:</p>
                             <FaqTable
-                                headers={['Resultado', 'Vencedor', 'Perdedor']}
+                                headers={['Cenário', 'Vencedor', 'Perdedor']}
                                 rows={[
-                                    ['2-1 (normal)', '+16', '-16'],
-                                    ['4-1 (goleada)', '+20', '-20'],
+                                    ['Vitória por 1-2 golos', '+16', '-16'],
+                                    ['Vitória por 3-5 golos', '+20', '-20'],
+                                    ['Vitória por 6+ golos', '+24', '-24'],
                                     ['Empate', '0', '0'],
                                 ]}
                             />
@@ -231,10 +232,11 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                             <FaqTable
                                 headers={['Cenário', 'Favorito', 'Underdog']}
                                 rows={[
-                                    ['Favorito ganha 3-1', '+8', '-8'],
-                                    ['Favorito ganha 5-0 (goleada)', '+11', '-11'],
-                                    ['Empate 2-2', '-8', '+8'],
-                                    ['Upset! Underdog ganha 2-1', '-24', '+24'],
+                                    ['Favorito ganha por 1-2 golos', '+8', '-8'],
+                                    ['Favorito ganha por 3-5 golos', '+10', '-10'],
+                                    ['Empate', '-8', '+8'],
+                                    ['Upset! Underdog ganha por 1-2', '-24', '+24'],
+                                    ['Upset + Goleada! Underdog por 3-5', '-30', '+30'],
                                 ]}
                             />
                         </div>
@@ -250,9 +252,9 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                             <FaqTable
                                 headers={['Cenário', 'Favorito', 'Underdog']}
                                 rows={[
-                                    ['Favorito ganha 2-1', '+3', '-3'],
-                                    ['Upset! Underdog ganha 2-1', '-29', '+29'],
-                                    ['Upset + Goleada! Underdog ganha 4-0', '-44', '+44'],
+                                    ['Favorito ganha por 1-2 golos', '+3', '-3'],
+                                    ['Upset! Underdog ganha por 1-2', '-29', '+29'],
+                                    ['Upset + Goleada! Underdog por 3-5', '-36', '+36'],
                                 ]}
                             />
                         </div>
@@ -269,9 +271,8 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                                 headers={['Diferença de golos', 'Multiplicador', 'Efeito']}
                                 rows={[
                                     ['0-2 golos', '1.0x', 'Normal'],
-                                    ['3 golos', '1.25x', '+25%'],
-                                    ['4 golos', '1.5x', '+50%'],
-                                    ['5+ golos', '1.75x', '+75% (máximo)'],
+                                    ['3-5 golos', '1.25x', '+25%'],
+                                    ['6+ golos', '1.5x', '+50% (máximo)'],
                                 ]}
                             />
                             <p>Se eras favorito e levaste uma goleada, perdes muito mais do que numa derrota normal.</p>
@@ -340,16 +341,16 @@ function EloFAQ({ currentSeason }: { currentSeason: number | undefined }) {
                                     ['K', '32', 'Controla a volatilidade — quantos pontos se trocam por jogo. Mais alto = mudanças maiores. (No xadrez de elite usam 16, para principiantes 40)'],
                                     ['Escala', '200', 'Controla o peso da diferença de Elo. Com 200 pts de diferença, o favorito tem ~91% de chance'],
                                     ['Elo inicial', '1000', 'O ponto de partida para todos. Arbitrário (no xadrez usam 1500)'],
-                                    ['Multiplicador', '1.0 – 1.75x', 'Amplifica o K em goleadas (3+ golos). Não é Elo original — inspirado no FiveThirtyEight'],
+                                    ['Multiplicador', '1.0 – 1.5x', 'Amplifica o K em goleadas (3+ golos). Não é Elo original — inspirado no FiveThirtyEight'],
                                 ]}
                             />
 
                             <p className="font-semibold text-gray-700 mt-2">Exemplo passo a passo:</p>
                             <div className="bg-gray-100 rounded p-2 text-[11px] space-y-0.5">
-                                <p>Equipa A (Elo 1050) vs Equipa B (Elo 950). A ganha 4-1.</p>
+                                <p>Equipa A (Elo 1050) vs Equipa B (Elo 950). A ganha por 4 golos de diferença.</p>
                                 <p>1. Resultado esperado de A = 1 / (1 + 10^((950-1050)/200)) = <strong>0.76</strong> (76%)</p>
                                 <p>2. Resultado real de A = <strong>1</strong> (vitória)</p>
-                                <p>3. Multiplicador = <strong>1.25</strong> (3 golos de diferença)</p>
+                                <p>3. Multiplicador = <strong>1.25</strong> (3-5 golos de diferença)</p>
                                 <p>4. Δ Elo = 32 × 1.25 × (1 − 0.76) = <strong>+10</strong></p>
                                 <p>→ A sobe para 1060, B desce para 940.</p>
                             </div>

@@ -7,6 +7,7 @@ import GameComments from "@/app/components/GameComments";
 import AddResultForm from "@/app/components/AddResultForm";
 import AdminPaymentToggle from "@/app/components/AdminPaymentToggle";
 import { detectCupMatchesForGame, getRoundName, calculateTotalRounds, fetchTournamentMatches } from "@/app/lib/tournament";
+import EloSimulation from "@/app/components/EloSimulation";
 import { Game } from "@/app/lib/definitions";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -105,6 +106,8 @@ export default async function Page({ params }: { params: Promise<{ id: string; l
                             ))}
                         </div>
                     </div>
+                    <EloSimulation brancosAvg={teamsWithElo.brancosAvg} pretosAvg={teamsWithElo.pretosAvg} />
+
                     {session?.user && (
                         <div className="mt-4">
                             <AddResultForm gameId={gameId} leagueSlug={leagueSlug} />
