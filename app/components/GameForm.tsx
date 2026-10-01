@@ -4,6 +4,7 @@ import { Star, X, Minus, Plus, ArrowLeft, Search, UserPlus, ClipboardPaste } fro
 import Link from 'next/link';
 import { useRef, useState, useTransition } from 'react';
 import PasteTeams from './PasteTeams';
+import { TEAM_SIZES, type TeamSize } from '@/app/lib/definitions';
 
 type SimplePlayer = { id: string; name: string };
 
@@ -37,7 +38,17 @@ type Props = {
 
 type TeamSide = 'brancos' | 'pretos';
 
-const TEAM_SIZE = 7;
+function inferTeamSize(initialData: Props['initialData']): TeamSize {
+    if (!initialData) return 7;
+    const brancosCount = new Set(
+        [initialData.brancosCaptain, ...initialData.brancosPlayers].filter(Boolean).map(String),
+    ).size;
+    const pretosCount = new Set(
+        [initialData.pretosCaptain, ...initialData.pretosPlayers].filter(Boolean).map(String),
+    ).size;
+    const max = Math.max(brancosCount, pretosCount);
+    return max === 8 ? 8 : 7;
+}
 
 const ROUND_LABELS: Record<number, string> = {
     1: 'Primeira Ronda',
@@ -80,6 +91,8 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
         initialData?.tournamentMatchId ? String(initialData.tournamentMatchId) : ''
     );
 
+    const [teamSize, setTeamSize] = useState<TeamSize>(() => inferTeamSize(initialData));
+
     const [errors, setErrors] = useState<string[]>([]);
     const [isPending, startTransition] = useTransition();
     const [pasteMode, setPasteMode] = useState(false);
@@ -106,11 +119,11 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
     function addPlayer(playerId: string, side: TeamSide) {
         const id = String(playerId);
         if (side === 'brancos') {
-            if (brancos.length >= TEAM_SIZE) return;
+            if (brancos.length >= teamSize) return;
             setBrancos(prev => [...prev, id]);
             if (!brancosCaptain) setBrancosCaptain(id);
         } else {
-            if (pretos.length >= TEAM_SIZE) return;
+            if (pretos.length >= teamSize) return;
             setPretos(prev => [...prev, id]);
             if (!pretosCaptain) setPretosCaptain(id);
         }
@@ -139,8 +152,8 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
 
     function validate(): string[] {
         const errs: string[] = [];
-        if (brancos.length !== TEAM_SIZE) errs.push(`Brancos precisa de ${TEAM_SIZE} jogadores (tem ${brancos.length})`);
-        if (pretos.length !== TEAM_SIZE) errs.push(`Pretos precisa de ${TEAM_SIZE} jogadores (tem ${pretos.length})`);
+        if (brancos.length !== teamSize) errs.push(`Brancos precisa de ${teamSize} jogadores (tem ${brancos.length})`);
+        if (pretos.length !== teamSize) errs.push(`Pretos precisa de ${teamSize} jogadores (tem ${pretos.length})`);
         if (!brancosCaptain) errs.push('Escolhe um capitão para os Brancos');
         if (!pretosCaptain) errs.push('Escolhe um capitão para os Pretos');
         if (!date) errs.push('Escolhe a data do jogo');
@@ -225,6 +238,27 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
                 </div>
             )}
 
+            {/* Format */}
+            <div className="w-full">
+                <span className="block text-sm font-medium text-gray-700 mb-1">Formato</span>
+                <div className="flex gap-2">
+                    {TEAM_SIZES.map(size => (
+                        <button
+                            key={size}
+                            type="button"
+                            onClick={() => { setTeamSize(size); setErrors([]); }}
+                            className={`flex-1 py-2 rounded-md border-2 text-sm font-medium transition-colors ${
+                                teamSize === size
+                                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            {size}x{size}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {/* Date */}
             <div className="w-full">
                 <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">Data do jogo</label>
@@ -254,6 +288,7 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
                     players={allPlayers}
                     onConfirm={handlePasteConfirm}
                     onCancel={() => setPasteMode(false)}
+                    expectedTeamSize={teamSize}
                 />
             )}
 
@@ -282,6 +317,7 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
                 <TeamZone
                     label="Brancos"
                     side="brancos"
+                    teamSize={teamSize}
                     playerIds={brancos}
                     captainId={brancosCaptain}
                     available={available}
@@ -295,6 +331,7 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
                 <TeamZone
                     label="Pretos"
                     side="pretos"
+                    teamSize={teamSize}
                     playerIds={pretos}
                     captainId={pretosCaptain}
                     available={available}
@@ -361,6 +398,7 @@ export default function GameForm({ players, formAction, onCreatePlayer, tourname
 type TeamZoneProps = Readonly<{
     label: string;
     side: TeamSide;
+    teamSize: TeamSize;
     playerIds: string[];
     captainId: string | null;
     available: SimplePlayer[];
@@ -373,14 +411,14 @@ type TeamZoneProps = Readonly<{
 }>;
 
 function TeamZone({
-    label, side, playerIds, captainId, available, getName, onAdd, onRemove, onMakeCaptain, onCreatePlayer, variant,
+    label, side, teamSize, playerIds, captainId, available, getName, onAdd, onRemove, onMakeCaptain, onCreatePlayer, variant,
 }: TeamZoneProps) {
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const isFull = playerIds.length >= TEAM_SIZE;
+    const isFull = playerIds.length >= teamSize;
 
     const trimmed = search.trim();
     const filtered = trimmed
@@ -416,12 +454,12 @@ function TeamZone({
     const dropdownBg = isLight ? 'bg-white' : 'bg-gray-700';
     const dropdownHover = isLight ? 'hover:bg-gray-100' : 'hover:bg-gray-600';
 
-    const emptySlots = Math.max(0, TEAM_SIZE - playerIds.length);
+    const emptySlots = Math.max(0, teamSize - playerIds.length);
 
     return (
         <div className={`rounded-lg border-2 p-3 ${bgClass}`}>
             <h3 className={`font-bold text-center mb-2 ${textClass}`}>
-                {label} <span className="font-normal text-sm opacity-60">({playerIds.length}/{TEAM_SIZE})</span>
+                {label} <span className="font-normal text-sm opacity-60">({playerIds.length}/{teamSize})</span>
             </h3>
 
             <div className="flex flex-col gap-1.5">

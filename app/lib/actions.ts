@@ -7,10 +7,35 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getWinningAndLosingTeams } from "../helpers/functions";
 import prisma from "./client";
-import { Game } from "./definitions";
+import { Game, TEAM_SIZES } from "./definitions";
 import { updateMatchFromGame } from "./tournament";
 
-const gameSchema = z.object({
+const allowedTeamSizes = new Set<number>(TEAM_SIZES);
+
+function refineTeamSizes(
+    data: {
+        brancos_players: string[];
+        pretos_players: string[];
+    },
+    ctx: z.RefinementCtx,
+) {
+    const brancosTotal = data.brancos_players.length + 1;
+    const pretosTotal = data.pretos_players.length + 1;
+    if (brancosTotal !== pretosTotal) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Brancos e Pretos devem ter o mesmo número de jogadores',
+        });
+    }
+    if (!allowedTeamSizes.has(brancosTotal) || !allowedTeamSizes.has(pretosTotal)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Cada equipa deve ter 7 ou 8 jogadores (capitão incluído)',
+        });
+    }
+}
+
+const gameSchemaObject = z.object({
     date: z.coerce.date(),
     brancos_score: z.coerce.number().nullable(),
     pretos_score: z.coerce.number().nullable(),
@@ -23,7 +48,8 @@ const gameSchema = z.object({
     tournament_match_id: z.number().optional(),
 });
 
-const CreateGame = gameSchema.omit({ numero: true });
+const CreateGame = gameSchemaObject.omit({ numero: true }).superRefine(refineTeamSizes);
+const gameSchema = gameSchemaObject.superRefine(refineTeamSizes);
 
 async function batchUpdatePlayers(
     playerIds: string[],

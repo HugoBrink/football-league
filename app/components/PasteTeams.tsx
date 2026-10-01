@@ -16,6 +16,7 @@ type Props = {
     players: SimplePlayer[];
     onConfirm: (brancos: string[], pretos: string[], brancosCaptain: string, pretosCaptain: string) => void;
     onCancel: () => void;
+    expectedTeamSize?: number;
 };
 
 function normalize(s: string): string {
@@ -117,7 +118,7 @@ function findBestMatch(name: string, players: SimplePlayer[], used: Set<string>)
     return { inputName: name, match: null, score: 0, alternatives: scored.slice(0, 5).map(s => s.player) };
 }
 
-export default function PasteTeams({ players, onConfirm, onCancel }: Props) {
+export default function PasteTeams({ players, onConfirm, onCancel, expectedTeamSize }: Props) {
     const [text, setText] = useState('');
     const [step, setStep] = useState<'paste' | 'review'>('paste');
     const [brancosMatches, setBrancosMatches] = useState<MatchedPlayer[]>([]);
@@ -263,6 +264,19 @@ export default function PasteTeams({ players, onConfirm, onCancel }: Props) {
                     Alguns nomes nao foram reconhecidos. Corrige manualmente.
                 </div>
             )}
+
+            {expectedTeamSize != null && (() => {
+                const bCount = brancosMatches.filter(m => m.match).length;
+                const pCount = pretosMatches.filter(m => m.match).length;
+                const mismatch = bCount !== expectedTeamSize || pCount !== expectedTeamSize;
+                if (!mismatch) return null;
+                return (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        Esperavas {expectedTeamSize} jogadores por equipa (Brancos: {bCount}, Pretos: {pCount}). Podes corrigir depois no formulário.
+                    </div>
+                );
+            })()}
 
             <button
                 type="button"

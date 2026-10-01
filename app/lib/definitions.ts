@@ -1,3 +1,6 @@
+export const TEAM_SIZES = [7, 8] as const;
+export type TeamSize = (typeof TEAM_SIZES)[number];
+
 export type Player = {
     id: any
     name: string
